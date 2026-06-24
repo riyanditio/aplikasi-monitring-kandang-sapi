@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import os
+st.success("Aplikasi ini sekarang bebas diakses siapa saja! 🚀")
 
 # Nama file database
 DATA_FILE = "data_sapi.csv"
@@ -9,7 +10,7 @@ JENIS_FILE = "jenis_sapi.csv"
 PANEN_FILE = "data_panen.csv"
 USERS_FILE = "users.csv"
 TRUK_FILE = "timbangan_truk.csv"
-LOGS_FILE = "log_aktivitas.csv"  # Database baru untuk log aktivitas harian operator
+LOGS_FILE = "log_aktivitas.csv"  # Database untuk log aktivitas harian operator
 
 # Master Daftar Pen/Kandang
 DAFTAR_PEN = [
@@ -27,7 +28,7 @@ DEFAULT_JENIS_SAPI = [
     "Ex Impor"
 ]
 
-# Master Seluruh Menu Aplikasi (Ditambahkan menu Log Aktivitas Operator)
+# Master Seluruh Menu Aplikasi
 ALL_MENUS = [
     "📊 Dashboard & Tabel Monitor", 
     "🏠 Manajemen Pen & Mutasi Sapi", 
@@ -43,7 +44,7 @@ ALL_MENUS = [
     "📜 Log Aktivitas Operator"
 ]
 
-# --- FUNGSI BARU: MENCATAT LOG RIWAYAT AKTIVITAS ---
+# --- FUNGSI MENCATAT LOG RIWAYAT AKTIVITAS ---
 def add_activity_log(operator, aktivitas, detail):
     cols = ["Tanggal & Waktu", "Operator", "Aktivitas", "Detail Keterangan"]
     new_log = {
@@ -76,21 +77,26 @@ def load_users():
         "📈 Analisis & Grafik Performa"
     ])
     
+    # PENGAMAN OTOMATIS: Jika tidak ada file secrets, gunakan password default lokal
+    try:
+        admin_pwd = st.secrets["ADMIN_PASSWORD"]
+        operator_pwd = st.secrets["OPERATOR_PASSWORD"]
+    except Exception:
+        admin_pwd = "admin123"
+        operator_pwd = "operator123"
+    
     if os.path.exists(USERS_FILE):
         df = pd.read_csv(USERS_FILE)
-        # Migrasi otomatis jika file users lama belum memiliki kolom kustom "Menus"
         if "Menus" not in df.columns:
             df["Menus"] = df["Role"].apply(lambda r: default_admin_menus if r == "Admin" else default_op_menus)
             df.to_csv(USERS_FILE, index=False)
             
-        # OTO-MIGRASI: Jika menu baru belum terdaftar di baris user lama, suntikkan otomatis
         updated = False
         for idx, row in df.iterrows():
             current_menus = str(row["Menus"]).split("|")
             if "🚛 Timbangan Armada Truk" not in current_menus:
                 current_menus.append("🚛 Timbangan Armada Truk")
                 updated = True
-            # Berikan akses menu log ke Admin secara otomatis saat migrasi
             if "📜 Log Aktivitas Operator" not in current_menus and row["Role"] == "Admin":
                 current_menus.append("📜 Log Aktivitas Operator")
                 updated = True
@@ -104,8 +110,8 @@ def load_users():
         return df
     else:
         df = pd.DataFrame([
-            {"Username": "admin", "Password": "admin123", "Role": "Admin", "Menus": default_admin_menus},
-            {"Username": "operator", "Password": "operator123", "Role": "Operator", "Menus": default_op_menus}
+            {"Username": "admin", "Password": admin_pwd, "Role": "Admin", "Menus": default_admin_menus},
+            {"Username": "operator", "Password": operator_pwd, "Role": "Operator", "Menus": default_op_menus}
         ])
         df.to_csv(USERS_FILE, index=False)
         return df
@@ -236,9 +242,7 @@ def login_page():
                     st.query_params["username"] = actual_username
                     st.query_params["role"] = role_user
                     
-                    # LOGGING AKTIVITAS
                     add_activity_log(actual_username, "Login", "Berhasil masuk ke dalam sistem.")
-                    
                     st.success(f"Login Berhasil! Selamat datang {actual_username}")
                     st.rerun()
                 else:
@@ -247,7 +251,6 @@ def login_page():
 # Pengaturan halaman Wide
 st.set_page_config(page_title="Sistem Penggemukan Sapi", layout="wide")
 
-# DETEKSI REFRESH PAGE
 if "logged_in" not in st.session_state:
     if "logged_in" in st.query_params and st.query_params["logged_in"] == "true":
         username_ref = st.query_params.get("username", "user")
@@ -293,8 +296,6 @@ else:
         st.rerun()
         
     st.sidebar.markdown("---")
-
-    # Ambil menu yang diizinkan untuk user
     menu = st.sidebar.selectbox("PILIH MENU APLIKASI", daftar_menu_user)
 
     # ==================== MENU 1: DASHBOARD ====================
@@ -339,7 +340,6 @@ else:
     # ==================== MENU 2: MANAJEMEN PEN & MUTASI SAPI ====================
     elif menu == "🏠 Manajemen Pen & Mutasi Sapi":
         st.subheader("🏠 Manajemen Stok Populasi per Pen & Mutasi Kandang")
-        
         tab_stok, tab_pindah = st.tabs(["📊 Stok Populasi per Pen", "🔄 Mutasi (Pindah Kandang)"])
         
         with tab_stok:
@@ -360,7 +360,6 @@ else:
                     filter_berat = st.slider("5. Rentang Berat Akhir (kg)", min_value=0, max_value=1000, value=(0, 1000))
 
             df_filtered = df_sapi.copy()
-            
             if search_rfid.strip():
                 df_filtered = df_filtered[df_filtered["RFID/Tag"].astype(str).str.contains(search_rfid.strip(), case=False)]
             if filter_jenis != "Semua": df_filtered = df_filtered[df_filtered["Jenis Sapi"] == filter_jenis]
@@ -428,9 +427,13 @@ else:
                         
                         akses_diberikan = True
                         if user_role == "Operator":
-                            st.markdown("⚠️ **Otorisasi Diperlukan:** Sesi Anda saat ini adalah Operator. Wajib memasukkan password akun Admin utama (`admin123`) untuk menyimpan perubahan total.")
+                            try:
+                                admin_pwd = st.secrets["ADMIN_PASSWORD"]
+                            except Exception:
+                                admin_pwd = "admin123"
+                            st.markdown("⚠️ **Otorisasi Diperlukan:** Sesi Anda saat ini adalah Operator. Wajib memasukkan password akun Admin utama untuk menyimpan perubahan total.")
                             pwd_input = st.text_input("Masukkan Password Admin Utama", type="password", key="pwd_pop_total_edit")
-                            if pwd_input != "admin123":
+                            if pwd_input != admin_pwd:
                                 akses_diberikan = False
                                 
                         if st.form_submit_button("Simpan Seluruh Perubahan Data Sapi", type="primary"):
@@ -453,20 +456,16 @@ else:
                                 df_sapi.at[idx_kor, "ADG (kg/hari)"] = calculate_adg(new_tgl_m.strftime("%Y-%m-%d"), new_bobot_awal, new_tgl_a.strftime("%Y-%m-%d"), new_bobot_akhir)
                                 
                                 save_data(df_sapi)
-                                
-                                # LOGGING AKTIVITAS
-                                add_activity_log(user_name, "Koreksi Total Sapi", f"Mengubah total data Sapi RFID {selected_tag_kor} -> RFID baru: {new_rfid}, Pen: {new_pen}, Berat: {new_bobot_akhir}kg.")
-                                
+                                add_activity_log(user_name, "Koreksi Total Sapi", f"Mengubah data Sapi RFID {selected_tag_kor} -> RFID baru: {new_rfid}, Pen: {new_pen}, Berat: {new_bobot_akhir}kg.")
                                 st.success(f"🎉 Sukses! Data Sapi RFID {selected_tag_kor} berhasil diperbarui.")
                                 st.rerun()
                 else:
                     st.info("Belum ada data sapi aktif.")
 
-        # --- RE-UPDATE: LOGIKA MUTASI CASCADING + INFORMASI BERAT SAPI AKTIF ---
         with tab_pindah:
             st.write("### 🔄 Form Pemindahan (Mutasi) Kandang Sapi Bertingkat")
             if df_sapi.empty:
-                st.info("Belum ada data sapi aktif untuk dimutasi.")
+                st.info("Belum ada sapi aktif untuk dimutasi.")
             else:
                 kandang_asal = st.selectbox("1. Pilih Kandang / Pen Asal:", DAFTAR_PEN, key="sb_kandang_asal")
                 df_sapi_asal = df_sapi[df_sapi["Lokasi Pen"] == kandang_asal]
@@ -475,11 +474,7 @@ else:
                     st.warning(f"⚠️ Tidak ada populasi sapi aktif di dalam {kandang_asal} saat ini.")
                 else:
                     pilihan_sapi = df_sapi_asal["RFID/Tag"].astype(str).tolist()
-                    selected_tag = st.selectbox(
-                        f"2. Pilih Nomor Tag / RFID Sapi (Ditemukan {len(pilihan_sapi)} Ekor di {kandang_asal}):", 
-                        options=pilihan_sapi, 
-                        key="sb_mutasi"
-                    )
+                    selected_tag = st.selectbox(f"2. Pilih Nomor Tag / RFID Sapi (Ditemukan {len(pilihan_sapi)} Ekor):", options=pilihan_sapi, key="sb_mutasi")
                     
                     idx = df_sapi[df_sapi["RFID/Tag"].astype(str) == selected_tag].index[0]
                     data_sapi = df_sapi.loc[idx]
@@ -501,11 +496,8 @@ else:
                         if st.button("Proses Mutasi Sapi", type="primary", use_container_width=True):
                             df_sapi.at[idx, "Lokasi Pen"] = pen_tujuan
                             save_data(df_sapi)
-                            
-                            # LOGGING AKTIVITAS
-                            add_activity_log(user_name, "Mutasi Kandang", f"Memindahkan Sapi RFID {selected_tag} ({data_sapi['Bobot Akhir (kg)']} kg) dari {kandang_asal} menuju {pen_tujuan}.")
-                            
-                            st.success(f"🎉 Sukses! Sapi RFID {selected_tag} dengan bobot {data_sapi['Bobot Akhir (kg)']} kg berhasil dipindahkan dari {kandang_asal} menuju {pen_tujuan}.")
+                            add_activity_log(user_name, "Mutasi Kandang", f"Memindahkan Sapi RFID {selected_tag} dari {kandang_asal} menuju {pen_tujuan}.")
+                            st.success(f"🎉 Sukses! Sapi RFID {selected_tag} berhasil dipindahkan menuju {pen_tujuan}.")
                             st.rerun()
 
     # ==================== MENU 3: MASTER JENIS SAPI ====================
@@ -521,10 +513,7 @@ else:
                 if st.form_submit_button("Simpan", type="primary") and input_jenis_baru.strip():
                     LIST_JENIS_SAPI.append(input_jenis_baru.strip())
                     save_jenis_sapi(LIST_JENIS_SAPI)
-                    
-                    # LOGGING AKTIVITAS
                     add_activity_log(user_name, "Tambah Jenis Sapi", f"Menambahkan varietas jenis sapi baru: {input_jenis_baru.strip()}")
-                    
                     st.success("Sukses!"); st.rerun()
         with tab_edit:
             jenis_diubah = st.selectbox("Pilih Jenis Sapi", LIST_JENIS_SAPI, key="sb_edit_j")
@@ -533,28 +522,21 @@ else:
                 idx_j = LIST_JENIS_SAPI.index(jenis_diubah)
                 LIST_JENIS_SAPI[idx_j] = nama_baru.strip()
                 save_jenis_sapi(LIST_JENIS_SAPI)
-                
-                # LOGGING AKTIVITAS
                 add_activity_log(user_name, "Edit Jenis Sapi", f"Mengubah nama jenis sapi dari '{jenis_diubah}' menjadi '{nama_baru.strip()}'.")
-                
                 st.success("Berhasil diubah!"); st.rerun()
         with tab_hapus:
-            jenis_dihapus = st.selectbox("Pilih Jenis Sapi Godok yang Dihapus", LIST_JENIS_SAPI, key="sb_hapus_j")
+            jenis_dihapus = st.selectbox("Pilih Jenis Sapi yang Dihapus", LIST_JENIS_SAPI, key="sb_hapus_j")
             if st.button("Hapus Permanen", type="primary"):
                 if jenis_dihapus in LIST_JENIS_SAPI:
                     LIST_JENIS_SAPI.remove(jenis_dihapus)
                     save_jenis_sapi(LIST_JENIS_SAPI)
-                    
-                    # LOGGING AKTIVITAS
                     add_activity_log(user_name, "Hapus Jenis Sapi", f"Menghapus varietas jenis sapi: {jenis_dihapus}")
-                    
                     st.success("Terhapus!"); st.rerun()
 
     # ==================== MENU 4: MANAJEMEN AKUN OPERATOR ====================
     elif menu == "👥 Manajemen Akun Operator":
         st.subheader("👥 Manajemen Akun Pengguna & Pengaturan Hak Akses Menu")
         df_users = load_users()
-        
         tab_user_lihat, tab_user_tambah, tab_user_hapus = st.tabs(["📋 Daftar Anggota Aktif", "➕ Tambah Operator & Atur Menu", "❌ Hapus Akun"])
         
         with tab_user_lihat:
@@ -591,17 +573,13 @@ else:
                         new_account = pd.DataFrame([{"Username": new_username, "Password": new_password, "Role": new_role, "Menus": menus_str}])
                         df_users = pd.concat([df_users, new_account], ignore_index=True)
                         save_users(df_users)
-                        
-                        # LOGGING AKTIVITAS
                         add_activity_log(user_name, "Tambah Operator", f"Membuat akun pengguna baru '{new_username}' dengan hak akses {new_role}.")
-                        
-                        st.success(f"🎉 Sukses! Akun '{new_username}' berhasil aktif dengan {len(chosen_menus)} izin menu.")
+                        st.success(f"🎉 Sukses! Akun '{new_username}' berhasil aktif.")
                         st.rerun()
                         
         with tab_user_hapus:
             st.write("### Hapus Akses Akun")
             list_hapus = df_users[df_users["Username"].astype(str).str.lower() != "admin"]["Username"].tolist()
-            
             if not list_hapus:
                 st.info("Tidak ada akun operator tambahan yang bisa dihapus.")
             else:
@@ -609,27 +587,21 @@ else:
                 if st.button("Hapus Akun Selamanya", type="primary"):
                     df_users = df_users[df_users["Username"] != user_yang_dihapus]
                     save_users(df_users)
-                    
-                    # LOGGING AKTIVITAS
                     add_activity_log(user_name, "Hapus Operator", f"Menghapus/menonaktifkan akun pengguna: {user_yang_dihapus}")
-                    
                     st.success(f"🗑️ Akun '{user_yang_dihapus}' berhasil dinonaktifkan.")
                     st.rerun()
 
     # ==================== MENU 5: TIMBANGAN ARMADA TRUK ====================
     elif menu == "🚛 Timbangan Armada Truk":
         st.subheader("🚛 Logistik Jembatan Timbang Kendaraan & Armada Sapi")
-        
         tab_truk_input, tab_truk_histori = st.tabs(["➕ Input Timbangan Truk Baru", "📜 Riwayat Jembatan Timbang"])
         
         with tab_truk_input:
             st.write("### 📝 Form Pencatatan Timbangan Truk (Real-Time Kalkulasi)")
-            
             with st.form("form_timbangan_truk"):
                 col_tr1, col_tr2 = st.columns(2)
-                
                 with col_tr1:
-                    plat_nomor = st.text_input("1. Nomor Plat Kendaraan / No Lambung", placeholder="Contoh: B 9123 TAA / TRUK-04").strip()
+                    plat_nomor = st.text_input("1. Nomor Plat Kendaraan / No Lambung", placeholder="Contoh: B 9123 TAA").strip()
                     tgl_timbang = st.date_input("2. Tanggal Penimbangan", datetime.now())
                     ket_muatan = st.selectbox("3. Keterangan Status Muatan", [
                         "Sapi Masuk (Bongkar/Unloading dari Luar)", 
@@ -638,15 +610,12 @@ else:
                         "Lain-lain"
                     ])
                     jml_sapi_truk = st.number_input("4. Jumlah Sapi di Dalam Truk (Ekor)", min_value=1, step=1, value=10)
-                
                 with col_tr2:
-                    bruto_kg = st.number_input("5. Berat Kotor / Bruto (Truk + Sapi) dalam kg", min_value=0.0, step=10.0, value=7500.0)
-                    tara_kg = st.number_input("6. Berat Kosong / Tara (Truk Saja) dalam kg", min_value=0.0, step=10.0, value=4000.0)
+                    bruto_kg = st.number_input("5. Berat Kotor / Bruto dalam kg", min_value=0.0, step=10.0, value=7500.0)
+                    tara_kg = st.number_input("6. Berat Kosong / Tara dalam kg", min_value=0.0, step=10.0, value=4000.0)
                     
                     netto_kg = bruto_kg - tara_kg
-                    if netto_kg < 0:
-                        netto_kg = 0.0
-                        
+                    if netto_kg < 0: netto_kg = 0.0
                     avg_per_sapi = round(netto_kg / jml_sapi_truk, 1) if jml_sapi_truk > 0 else 0.0
                     
                     st.markdown("#### 📊 Hasil Kalkulasi Timbangan:")
@@ -656,49 +625,36 @@ else:
                     """)
                     
                 st.markdown("---")
-                btn_simpan_truk = st.form_submit_button("Simpan Log Timbangan Armada", type="primary")
-                
-                if btn_simpan_truk:
+                if st.form_submit_button("Simpan Log Timbangan Armada", type="primary"):
                     if not plat_nomor:
-                        st.error("❌ Gagal! Nomor Plat/Armada wajib diisi untuk pelacakan vendor logistik.")
+                        st.error("❌ Gagal! Nomor Plat wajib diisi.")
                     elif bruto_kg <= tara_kg:
-                        st.error("❌ Gagal! Berat Bruto (Kotor) harus lebih besar daripada Berat Tara (Kosong Truk).")
+                        st.error("❌ Gagal! Bruto harus lebih besar dari Tara.")
                     else:
                         no_transaksi = f"TRK-{datetime.now().strftime('%d%H%M%S')}"
-                        
                         new_log_truk = {
-                            "No Transaksi": no_transaksi,
-                            "Tanggal": tgl_timbang.strftime("%Y-%m-%d"),
-                            "No Plat / Armada": plat_nomor.upper(),
-                            "Keterangan Muatan": ket_muatan,
-                            "Bruto / Kotor (kg)": bruto_kg,
-                            "Tara / Kosong (kg)": tara_kg,
-                            "Netto / Bersih (kg)": netto_kg,
-                            "Jumlah Sapi (Ekor)": int(jml_sapi_truk),
-                            "Rata-rata / Ekor (kg)": avg_per_sapi,
-                            "Operator Lapangan": user_name
+                            "No Transaksi": no_transaksi, "Tanggal": tgl_timbang.strftime("%Y-%m-%d"),
+                            "No Plat / Armada": plat_nomor.upper(), "Keterangan Muatan": ket_muatan,
+                            "Bruto / Kotor (kg)": bruto_kg, "Tara / Kosong (kg)": tara_kg,
+                            "Netto / Bersih (kg)": netto_kg, "Jumlah Sapi (Ekor)": int(jml_sapi_truk),
+                            "Rata-rata / Ekor (kg)": avg_per_sapi, "Operator Lapangan": user_name
                         }
-                        
                         df_truk = pd.concat([df_truk, pd.DataFrame([new_log_truk])], ignore_index=True)
                         save_truk_data(df_truk)
-                        
-                        # LOGGING AKTIVITAS
-                        add_activity_log(user_name, "Timbangan Truk", f"Pencatatan jembatan timbang No {no_transaksi} | Armada: {plat_nomor.upper()} | Muatan: {ket_muatan} | Netto: {netto_kg} kg ({jml_sapi_truk} Ekor).")
-                        
-                        st.success(f"🎉 Berhasil Disimpan! Transaksi {no_transaksi} tercatat di database.")
+                        add_activity_log(user_name, "Timbangan Truk", f"Pencatatan jembatan timbang No {no_transaksi} | Netto: {netto_kg} kg.")
+                        st.success(f"🎉 Berhasil Disimpan! Transaksi {no_transaksi} tercatat.")
                         st.rerun()
                         
         with tab_truk_histori:
             st.write("### 📜 Riwayat Bongkar Muat Kendaraan")
             if df_truk.empty:
-                st.info("Belum ada log penimbangan armada truk yang tercatat.")
+                st.info("Belum ada log penimbangan armada truk.")
             else:
                 col_st1, col_st2, col_st3 = st.columns(3)
                 col_st1.metric("Total Kendaraan Ditimbang", f"{len(df_truk)} Armada")
                 col_st2.metric("Total Tonase Bersih", f"{df_truk['Netto / Bersih (kg)'].sum():,} kg")
                 col_st3.metric("Total Sapi Termobilisasi", f"{int(df_truk['Jumlah Sapi (Ekor)'].sum())} Ekor")
                 st.markdown("---")
-                
                 df_truk_tampil = df_truk.copy()
                 df_truk_tampil.index = range(1, len(df_truk_tampil) + 1)
                 st.dataframe(df_truk_tampil, use_container_width=True)
@@ -725,10 +681,7 @@ else:
                     new_cow = {"RFID/Tag": tag_id, "Jenis Sapi": jenis_sapi_sel, "Jenis Kelamin": jenis_kelamin, "Umur Masuk (Bulan)": int(umur_masuk), "Asal Negara": asal, "Tgl Masuk": tgl_masuk.strftime("%Y-%m-%d"), "Bobot Awal (kg)": bobot_awal, "Tgl Cek Akhir": tgl_masuk.strftime("%Y-%m-%d"), "Bobot Akhir (kg)": bobot_awal, "ADG (kg/hari)": 0.0, "Total Pakan (kg)": 0.0, "Tgl Pakan Terakhir": "-", "Lokasi Pen": "Pen Karantina"}
                     df_sapi = pd.concat([df_sapi, pd.DataFrame([new_cow])], ignore_index=True)
                     save_data(df_sapi)
-                    
-                    # LOGGING AKTIVITAS
-                    add_activity_log(user_name, "Registrasi Sapi", f"Mendaftarkan sapi baru RFID: {tag_id} | Jenis: {jenis_sapi_sel} | Asal: {asal} | Bobot Awal: {bobot_awal} kg.")
-                    
+                    add_activity_log(user_name, "Registrasi Sapi", f"Mendaftarkan sapi baru RFID: {tag_id} | Bobot: {bobot_awal} kg.")
                     st.success("Berhasil didaftarkan!"); st.rerun()
 
     # ==================== MENU 7: INPUT PAKAN HARIAN ====================
@@ -749,10 +702,7 @@ else:
                     df_sapi.at[idx, "Total Pakan (kg)"] = float(data_sapi["Total Pakan (kg)"]) + pakan_hari_ini
                     df_sapi.at[idx, "Tgl Pakan Terakhir"] = tgl_pakan.strftime("%Y-%m-%d")
                     save_data(df_sapi)
-                    
-                    # LOGGING AKTIVITAS
-                    add_activity_log(user_name, "Input Pakan", f"Menambahkan pakan sebanyak {pakan_hari_ini} kg ke Sapi RFID {selected_tag} di {data_sapi['Lokasi Pen']}.")
-                    
+                    add_activity_log(user_name, "Input Pakan", f"Menambahkan pakan sebanyak {pakan_hari_ini} kg ke Sapi RFID {selected_tag}.")
                     st.success("Pakan terupdate!"); st.rerun()
 
     # ==================== MENU 8: INPUT TIMBANGAN BERKALA ====================
@@ -775,10 +725,7 @@ else:
                     df_sapi.at[idx, "Bobot Akhir (kg)"] = bobot_akhir
                     df_sapi.at[idx, "ADG (kg/hari)"] = adg_baru
                     save_data(df_sapi)
-                    
-                    # LOGGING AKTIVITAS
-                    add_activity_log(user_name, "Timbangan Berkala", f"Mencatat bobot baru Sapi RFID {selected_tag} -> {bobot_akhir} kg (ADG baru: {adg_baru} kg/hari).")
-                    
+                    add_activity_log(user_name, "Timbangan Berkala", f"Mencatat bobot baru Sapi RFID {selected_tag} -> {bobot_akhir} kg.")
                     st.success("Timbangan berhasil disimpan!"); st.rerun()
 
     # ==================== MENU 9: ANALISIS & GRAFIK PERFORMA ====================
@@ -799,11 +746,11 @@ else:
                 df_pop_pen = pd.DataFrame({"Lokasi Pen": DAFTAR_PEN}).merge(df_pop_pen, on="Lokasi Pen", how="left").fillna(0)
                 st.bar_chart(data=df_pop_pen, x="Lokasi Pen", y="Jumlah (Ekor)", use_container_width=True)
             with col_pop2:
-                st.markdown("#### 🐂 Jumlah Sapi berdasarkan Varietas / Jenis (Ekor)")
+                st.markdown("#### 🐂 Jumlah Sapi berdasarkan Varietas (Ekor)")
                 st.bar_chart(data=df_analisis.groupby("Jenis Sapi").size().reset_index(name="Jumlah (Ekor)"), x="Jenis Sapi", y="Jumlah (Ekor)", use_container_width=True)
                 
             st.markdown("---")
-            st.markdown("### 📈 Grafik Analisis Performa Pertumbuhan Sapi Aktif")
+            st.markdown("### 📈 Grafik Analisis Performa Pertumbuhan")
             col_g1, col_g2 = st.columns(2)
             with col_g1:
                 st.bar_chart(data=df_analisis.groupby("Jenis Sapi")["ADG (kg/hari)"].mean().reset_index(), x="Jenis Sapi", y="ADG (kg/hari)", use_container_width=True)
@@ -818,13 +765,11 @@ else:
         tab_form_panen, tab_riwayat = st.tabs(["➕ Proses Panen Sapi", "📜 Riwayat Sapi Terjual/Panen"])
         
         with tab_form_panen:
-            if df_sapi.empty:
-                st.info("Tidak ada sapi aktif di kandang yang bisa dipanen.")
+            if df_sapi.empty: st.info("Tidak ada sapi aktif di kandang.")
             else:
                 st.write("### 📝 Form Pencatatan Keluar / Panen")
                 pilihan_sapi = df_sapi["RFID/Tag"].astype(str).tolist()
-                
-                selected_tag = st.selectbox("Pilih RFID Sapi yang Akan Dipanen/Dijual:", options=pilihan_sapi)
+                selected_tag = st.selectbox("Pilih RFID Sapi yang Akan Dipanen:", options=pilihan_sapi)
                 idx = df_sapi[df_sapi["RFID/Tag"].astype(str) == selected_tag].index[0]
                 data_sapi = df_sapi.loc[idx]
                 
@@ -836,23 +781,18 @@ else:
                 with col_p1:
                     st.info(f"""
 * **RFID/Tag:** {data_sapi['RFID/Tag']}
-* **Jenis Sapi:** {data_sapi['Jenis Sapi']} ({data_sapi['Jenis Kelamin']})
-* **Asal Negara:** {data_sapi['Asal Negara']}
-* **Lokasi Terakhir:** {data_sapi['Lokasi Pen']}
-* **Lama Pelihara ( s/d Hari Ini ):** {hari_pelihara} Hari
+* **Jenis Sapi:** {data_sapi['Jenis Sapi']}
+* **Lama Pelihara:** {hari_pelihara} Hari
 * **Bobot Awal Masuk:** {data_sapi['Bobot Awal (kg)']} kg
                     """)
-                    
                 with col_p2:
                     with st.form("form_proses_panen"):
-                        tgl_panen = st.date_input("Tanggal Panen/Keluar Kandang", datetime.now())
-                        bobot_panen = st.number_input("Bobot Timbangan Riil Saat Panen (kg)", min_value=50.0, value=float(data_sapi['Bobot Akhir (kg)']), step=0.1)
-                        harga_per_kg = st.number_input("Harga Jual per kg Hidup (Rp)", min_value=0, value=52000, step=500)
-                        pembeli = st.text_input("Nama Pembeli / RPH / Agen", placeholder="Contoh: RPH Cakung / H. Jaka")
+                        tgl_panen = st.date_input("Tanggal Panen", datetime.now())
+                        bobot_panen = st.number_input("Bobot Timbangan Saat Panen (kg)", min_value=50.0, value=float(data_sapi['Bobot Akhir (kg)']))
+                        harga_per_kg = st.number_input("Harga Jual per kg (Rp)", min_value=0, value=52000)
+                        pembeli = st.text_input("Nama Pembeli / RPH", placeholder="Contoh: RPH Cakung")
                         
-                        btn_eksekusi_panen = st.form_submit_button("SAH-KAN PANEN & PINDAH DATA", type="primary")
-                        
-                        if btn_eksekusi_panen:
+                        if st.form_submit_button("SAH-KAN PANEN", type="primary"):
                             total_gain = float(bobot_panen - data_sapi['Bobot Awal (kg)'])
                             adg_final = round(total_gain / hari_pelihara, 2)
                             fcr_final = round(float(data_sapi['Total Pakan (kg)']) / total_gain, 2) if total_gain > 0 else 0.0
@@ -868,23 +808,17 @@ else:
                                 "ADG Akhir (kg/hari)": adg_final, "Harga Jual /kg (Rp)": harga_per_kg,
                                 "Total Pendapatan (Rp)": total_pendapatan, "Pembeli/Tujuan": pembeli
                             }
-                            
                             df_panen = pd.concat([df_panen, pd.DataFrame([data_panen_baru])], ignore_index=True)
                             save_panen_data(df_panen)
-                            
                             df_sapi = df_sapi.drop(idx)
                             save_data(df_sapi)
-                            
-                            # LOGGING AKTIVITAS
-                            add_activity_log(user_name, "Panen Sapi", f"Memanen Sapi RFID {selected_tag} | Bobot Panen: {bobot_panen} kg | Pembeli: {pembeli} | Pendapatan: Rp {total_pendapatan:,}")
-                            
+                            add_activity_log(user_name, "Panen Sapi", f"Memanen Sapi RFID {selected_tag} | Pendapatan: Rp {total_pendapatan:,}")
                             st.success(f"🎉 Sukses! Sapi RFID {selected_tag} Berhasil Dipanen.")
                             st.rerun()
                             
         with tab_riwayat:
             st.write("### 📜 Arsip Sejarah Penjualan & Panen Sapi")
-            if df_panen.empty:
-                st.info("Belum ada riwayat sapi yang dipanen atau dijual.")
+            if df_panen.empty: st.info("Belum ada riwayat panen.")
             else:
                 col_r1, col_r2, col_r3 = st.columns(3)
                 col_r1.metric("Total Sapi Terjual", f"{len(df_panen)} Ekor")
@@ -921,57 +855,38 @@ else:
                     df_sapi.at[idx, "Bobot Awal (kg)"] = new_bobot_awal
                     df_sapi.at[idx, "Total Pakan (kg)"] = new_pakan
                     save_data(df_sapi)
-                    
-                    # LOGGING AKTIVITAS
-                    add_activity_log(user_name, "Koreksi Data Cepat", f"Koreksi cepat Sapi RFID {selected_tag} -> RFID Baru: {new_tag}, Pen Baru: {new_pen}.")
-                    
+                    add_activity_log(user_name, "Koreksi Data Cepat", f"Koreksi cepat Sapi RFID {selected_tag}.")
                     st.success("Koreksi berhasil!"); st.rerun()
 
-    # ==================== MENU 12: LOG AKTIVITAS OPERATOR (BARU) ====================
+    # ==================== MENU 12: LOG AKTIVITAS OPERATOR ====================
     elif menu == "📜 Log Aktivitas Operator":
         st.subheader("📜 Log Riwayat Aktivitas Harian Operator")
-        st.markdown("Gunakan panel ini untuk mengaudit semua pekerjaan yang telah diselesaikan oleh operator di lapangan secara aktual.")
-        
-        if not os.path.exists(LOGS_FILE):
-            st.info("Belum ada log aktivitas operator yang tercatat.")
+        if not os.path.exists(LOGS_FILE): st.info("Belum ada log.")
         else:
             df_logs = pd.read_csv(LOGS_FILE)
-            if df_logs.empty:
-                st.info("Belum ada log aktivitas operator yang tercatat.")
+            if df_logs.empty: st.info("Belum ada log.")
             else:
-                # Panel Filter Log
                 col_log1, col_log2, col_log3 = st.columns(3)
                 with col_log1:
-                    ops_list = ["Semua"] + sorted(df_logs["Operator"].dropna().unique().tolist())
-                    filter_op = st.selectbox("Filter Nama Operator", ops_list)
+                    filter_op = st.selectbox("Filter Operator", ["Semua"] + sorted(df_logs["Operator"].dropna().unique().tolist()))
                 with col_log2:
-                    acts_list = ["Semua"] + sorted(df_logs["Aktivitas"].dropna().unique().tolist())
-                    filter_act = st.selectbox("Filter Jenis Aktivitas", acts_list)
+                    filter_act = st.selectbox("Filter Aktivitas", ["Semua"] + sorted(df_logs["Aktivitas"].dropna().unique().tolist()))
                 with col_log3:
-                    search_detail = st.text_input("Cari Kata Kunci Detail", placeholder="Ketik kata kunci...")
+                    search_detail = st.text_input("Cari Kata Kunci Detail")
 
-                # Proses Filter Data
                 df_logs_filtered = df_logs.copy()
-                if filter_op != "Semua":
-                    df_logs_filtered = df_logs_filtered[df_logs_filtered["Operator"] == filter_op]
-                if filter_act != "Semua":
-                    df_logs_filtered = df_logs_filtered[df_logs_filtered["Aktivitas"] == filter_act]
-                if search_detail.strip():
-                    df_logs_filtered = df_logs_filtered[df_logs_filtered["Detail Keterangan"].astype(str).str.contains(search_detail.strip(), case=False)]
+                if filter_op != "Semua": df_logs_filtered = df_logs_filtered[df_logs_filtered["Operator"] == filter_op]
+                if filter_act != "Semua": df_logs_filtered = df_logs_filtered[df_logs_filtered["Aktivitas"] == filter_act]
+                if search_detail.strip(): df_logs_filtered = df_logs_filtered[df_logs_filtered["Detail Keterangan"].astype(str).str.contains(search_detail.strip(), case=False)]
 
-                # Membalikkan urutan (log terbaru muncul di baris paling atas)
                 df_logs_filtered = df_logs_filtered.iloc[::-1].reset_index(drop=True)
                 df_logs_filtered.index = range(1, len(df_logs_filtered) + 1)
-                
-                st.write(f"Menampilkan **{len(df_logs_filtered)}** catatan log aktivitas.")
                 st.dataframe(df_logs_filtered, use_container_width=True)
                 
-                # Opsi Bersihkan Log (Hanya untuk Admin Utama)
                 st.markdown("---")
                 if st.button("🗑️ Bersihkan Semua Log Aktivitas", type="secondary"):
                     if st.session_state["role"] == "Admin":
                         pd.DataFrame(columns=["Tanggal & Waktu", "Operator", "Aktivitas", "Detail Keterangan"]).to_csv(LOGS_FILE, index=False)
-                        st.success("Semua data log aktivitas berhasil dibersihkan dari database!")
+                        st.success("Log berhasil dibersihkan!")
                         st.rerun()
-                    else:
-                        st.error("❌ Gagal! Hanya pengguna dengan tingkat akun Admin yang diizinkan untuk menghapus data log.")
+                    else: st.error("❌ Hanya Admin yang bisa menghapus log.")
