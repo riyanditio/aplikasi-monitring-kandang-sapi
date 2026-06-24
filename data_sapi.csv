@@ -1,0 +1,10 @@
+RFID/Tag,Kode Sapi,Jenis Sapi,Jenis Kelamin,Umur Masuk (Bulan),Asal Negara,Tgl Masuk,Bobot Awal (kg),Tgl Cek Akhir,Bobot Akhir (kg),ADG (kg/hari),Total Pakan (kg),Tgl Pakan Terakhir,Lokasi Pen
+PR6001,SP1,Feeder Bulls 2,Jantan,11,Australia,2026-06-24,351.6,2026-06-24,351.6,0.0,0.0,-,Pen B (Bobot 350-450kg)
+PR6002,SP1,Feeder Bulls 2,Jantan,11,Australia,2026-06-24,349.8,2026-06-24,349.8,0.0,0.0,-,Pen A (Bobot < 350kg)
+PR6004,SP1,Feeder Bulls,Jantan,11,Australia,2026-06-24,351.4,2026-06-24,351.4,0.0,0.0,-,Pen B (Bobot 350-450kg)
+PR6005,SP1,HG Medium Steer,Jantan,11,Australia,2026-06-24,355.2,2026-06-24,355.2,0.0,0.0,-,Pen D (Khusus/Isolasi Sakit)
+PR6006,SP1,HG Medium Steer,Jantan,11,Australia,2026-06-24,354.3,2026-06-24,354.3,0.0,0.0,-,Pen D (Khusus/Isolasi Sakit)
+PR6007,SP1,Cows B,Jantan,18,Australia,2026-06-24,348.7,2026-06-24,348.7,0.0,0.0,-,Pen A (Bobot < 350kg)
+PR6008,SP2,Cows B,Jantan,18,Australia,2026-06-24,348.9,2026-06-24,348.9,0.0,0.0,-,Pen A (Bobot < 350kg)
+PR6009,SP2,XB Feeder Steer,Jantan,18,Australia,2026-06-24,351.7,2026-06-24,351.7,0.0,0.0,-,Pen B (Bobot 350-450kg)
+PR6010,SP2,Cows,Jantan,18,Australia,2026-06-24,349.8,2026-06-24,349.8,0.0,0.0,-,Pen A (Bobot < 350kg)

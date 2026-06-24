@@ -1,0 +1,3 @@
+Username,Password,Role,Menus
+admin,admin123,Admin,📊 Dashboard & Tabel Monitor|🏠 Manajemen Pen & Mutasi Sapi|🐂 Kelola Master Jenis Sapi|👥 Manajemen Akun Operator|➕ Registrasi Sapi Baru|🍽️ Input Pakan Harian|⚖️ Input Timbangan Berkala|📈 Analisis & Grafik Performa|💰 Manajemen Panen & Penjualan|⚙️ Edit & Hapus Data|🚛 Timbangan Armada Truk|📜 Log Aktivitas Operator
+operator,operator123,Operator,📊 Dashboard & Tabel Monitor|🏠 Manajemen Pen & Mutasi Sapi|➕ Registrasi Sapi Baru|🍽️ Input Pakan Harian|⚖️ Input Timbangan Berkala|📈 Analisis & Grafik Performa|🚛 Timbangan Armada Truk
