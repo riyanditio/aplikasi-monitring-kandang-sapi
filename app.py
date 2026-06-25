@@ -220,7 +220,7 @@ def save_jenis_sapi(list_jenis):
 # --- FUNGSI MUAT DATA SAPI AKTIF ---
 def load_data():
     cols = [
-        "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Umur Masuk (Bulan)", "Asal Negara", 
+        "Kode Sapi", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Umur Masuk (Bulan)", "Asal Negara", 
         "Tgl Masuk", "Bobot Awal (kg)", "Tgl Cek Akhir", "Bobot Akhir (kg)", "ADG (kg/hari)",
         "Total Pakan (kg)", "Tgl Pakan Terakhir", "Lokasi Pen"
     ]
@@ -234,6 +234,11 @@ def load_data():
     if "Umur Sapi" in df.columns:
         df["Umur Masuk (Bulan)"] = 12
         df = df.drop(columns=["Umur Sapi"])
+    
+    # Toleransi untuk data lama yang belum punya kolom 'Kode Sapi'
+    if "Kode Sapi" not in df.columns:
+        df["Kode Sapi"] = "-"
+        
     if "Jenis Kelamin" not in df.columns:
         df["Jenis Kelamin"] = "Jantan"
     if "Total Pakan (kg)" not in df.columns:
@@ -248,7 +253,7 @@ def load_data():
 
 def save_data(df):
     cols = [
-        "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Umur Masuk (Bulan)", "Asal Negara", 
+        "Kode Sapi", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Umur Masuk (Bulan)", "Asal Negara", 
         "Tgl Masuk", "Bobot Awal (kg)", "Tgl Cek Akhir", "Bobot Akhir (kg)", "ADG (kg/hari)",
         "Total Pakan (kg)", "Tgl Pakan Terakhir", "Lokasi Pen"
     ]
@@ -257,15 +262,18 @@ def save_data(df):
 # --- FUNGSI MUAT DATA PANEN ---
 def load_panen_data():
     cols = [
-        "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Asal Negara", "Tgl Masuk", "Tgl Panen",
+        "Kode Sapi", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Asal Negara", "Tgl Masuk", "Tgl Panen",
         "Lama Pelihara (Hari)", "Bobot Awal (kg)", "Bobot Panen (kg)", "Total Gain (kg)",
         "Total Pakan (kg)", "FCR Akhir", "ADG Akhir (kg/hari)", "Harga Jual /kg (Rp)", "Total Pendapatan (Rp)", "Pembeli/Tujuan"
     ]
-    return read_sheet_to_df("data_panen", cols)
+    df = read_sheet_to_df("data_panen", cols)
+    if "Kode Sapi" not in df.columns and not df.empty:
+        df["Kode Sapi"] = "-"
+    return df
 
 def save_panen_data(df):
     cols = [
-        "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Asal Negara", "Tgl Masuk", "Tgl Panen",
+        "Kode Sapi", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Asal Negara", "Tgl Masuk", "Tgl Panen",
         "Lama Pelihara (Hari)", "Bobot Awal (kg)", "Bobot Panen (kg)", "Total Gain (kg)",
         "Total Pakan (kg)", "FCR Akhir", "ADG Akhir (kg/hari)", "Harga Jual /kg (Rp)", "Total Pendapatan (Rp)", "Pembeli/Tujuan"
     ]
@@ -386,7 +394,7 @@ else:
             )
             
             kolom_rapi = [
-                "RFID/Tag", "Jenis Sapi", "Lokasi Pen", "Jenis Kelamin", "Umur Masuk (Bulan)", "Umur Sekarang (Bulan)",
+                "Kode Sapi", "RFID/Tag", "Jenis Sapi", "Lokasi Pen", "Jenis Kelamin", "Umur Masuk (Bulan)", "Umur Sekarang (Bulan)",
                 "Asal Negara", "Tgl Masuk", "Lama Peliharaan (Hari)", "Bobot Awal (kg)", "Bobot Akhir (kg)", 
                 "Total Gain (kg)", "Total Pakan (kg)", "FCR", "ADG (kg/hari)"
             ]
@@ -415,21 +423,25 @@ else:
         with tab_stok:
             st.markdown("### 🔍 Panel Filter & Pencarian Sapi")
             with st.expander("Klik di sini untuk membuka/menutup parameter pencarian", expanded=True):
-                col_f0, col_f1, col_f2, col_f3, col_f4 = st.columns([1.2, 1, 1, 1, 1.3])
+                col_f0_a, col_f0, col_f1, col_f2, col_f3, col_f4 = st.columns([1, 1, 1, 1, 1, 1.2])
                 
+                with col_f0_a:
+                    search_kode = st.text_input("1. Cari Kode Sapi", placeholder="Ketik kode sapi...")
                 with col_f0:
-                    search_rfid = st.text_input("1. Cari RFID / Tag", placeholder="Ketik nomor RFID...")
+                    search_rfid = st.text_input("2. Cari RFID / Tag", placeholder="Ketik nomor RFID...")
                 with col_f1:
-                    filter_jenis = st.selectbox("2. Jenis Sapi", ["Semua"] + LIST_JENIS_SAPI)
+                    filter_jenis = st.selectbox("3. Jenis Sapi", ["Semua"] + LIST_JENIS_SAPI)
                 with col_f2:
-                    filter_kelamin = st.selectbox("3. Jenis Kelamin", ["Semua", "Jantan", "Betina"])
+                    filter_kelamin = st.selectbox("4. Jenis Kelamin", ["Semua", "Jantan", "Betina"])
                 with col_f3:
                     daftar_negara = ["Semua"] + sorted(df_sapi["Asal Negara"].dropna().unique().tolist())
-                    filter_asal = st.selectbox("4. Negara/Daerah Asal", daftar_negara)
+                    filter_asal = st.selectbox("5. Negara/Daerah Asal", daftar_negara)
                 with col_f4:
-                    filter_berat = st.slider("5. Rentang Berat Akhir (kg)", min_value=0, max_value=1000, value=(0, 1000))
+                    filter_berat = st.slider("6. Rentang Berat Akhir (kg)", min_value=0, max_value=1000, value=(0, 1000))
 
             df_filtered = df_sapi.copy()
+            if search_kode.strip():
+                df_filtered = df_filtered[df_filtered["Kode Sapi"].astype(str).str.contains(search_kode.strip(), case=False)]
             if search_rfid.strip():
                 df_filtered = df_filtered[df_filtered["RFID/Tag"].astype(str).str.contains(search_rfid.strip(), case=False)]
             if filter_jenis != "Semua": df_filtered = df_filtered[df_filtered["Jenis Sapi"] == filter_jenis]
@@ -459,7 +471,7 @@ else:
                 if df_filter_pen.empty:
                     st.caption("⚪ *Tidak ada sapi yang cocok dengan kriteria pencarian di pen ini.*")
                 else:
-                    df_tabel_pen = df_filter_pen[["RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Asal Negara", "Tgl Masuk", "Bobot Awal (kg)", "Tgl Cek Akhir", "Bobot Akhir (kg)", "ADG (kg/hari)", "Total Pakan (kg)"]].copy()
+                    df_tabel_pen = df_filter_pen[["Kode Sapi", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Asal Negara", "Tgl Masuk", "Bobot Awal (kg)", "Tgl Cek Akhir", "Bobot Akhir (kg)", "ADG (kg/hari)", "Total Pakan (kg)"]].copy()
                     df_tabel_pen.index = range(1, len(df_tabel_pen) + 1)
                     st.dataframe(df_tabel_pen, use_container_width=True)
 
@@ -478,6 +490,7 @@ else:
                     with st.form("form_pop_total_koreksi"):
                         col_k1, col_k2 = st.columns(2)
                         with col_k1:
+                            new_kode = st.text_input("Koreksi Kode Sapi Baru", value=str(data_kor.get("Kode Sapi", "-")))
                             new_rfid = st.text_input("Koreksi Nomor RFID / Tag Baru", value=str(data_kor["RFID/Tag"]))
                             new_jenis = st.selectbox("Koreksi Jenis Sapi", LIST_JENIS_SAPI, index=LIST_JENIS_SAPI.index(data_kor["Jenis Sapi"]) if data_kor["Jenis Sapi"] in LIST_JENIS_SAPI else 0)
                             new_kelamin = st.selectbox("Koreksi Jenis Kelamin", ["Jantan", "Betina"], index=0 if data_kor["Jenis Kelamin"] == "Jantan" else 1)
@@ -513,6 +526,7 @@ else:
                             elif new_rfid != selected_tag_kor and new_rfid in df_sapi["RFID/Tag"].values.astype(str):
                                 st.error(f"❌ Gagal Menyimpan! Nomor RFID '{new_rfid}' baru sudah digunakan oleh sapi lain.")
                             else:
+                                df_sapi.at[idx_kor, "Kode Sapi"] = new_kode
                                 df_sapi.at[idx_kor, "RFID/Tag"] = new_rfid
                                 df_sapi.at[idx_kor, "Jenis Sapi"] = new_jenis
                                 df_sapi.at[idx_kor, "Jenis Kelamin"] = new_kelamin
@@ -527,7 +541,7 @@ else:
                                 df_sapi.at[idx_kor, "ADG (kg/hari)"] = calculate_adg(new_tgl_m.strftime("%Y-%m-%d"), new_bobot_awal, new_tgl_a.strftime("%Y-%m-%d"), new_bobot_akhir)
                                 
                                 save_data(df_sapi)
-                                add_activity_log(user_name, "Koreksi Total Sapi", f"Mengubah data Sapi RFID {selected_tag_kor} -> RFID baru: {new_rfid}, Pen: {new_pen}, Berat: {new_bobot_akhir}kg.")
+                                add_activity_log(user_name, "Koreksi Total Sapi", f"Mengubah data Sapi Kode {new_kode}, RFID {selected_tag_kor} -> RFID baru: {new_rfid}, Pen: {new_pen}, Berat: {new_bobot_akhir}kg.")
                                 st.success(f"🎉 Sukses! Data Sapi RFID {selected_tag_kor} berhasil diperbarui.")
                                 st.rerun()
                 else:
@@ -554,6 +568,7 @@ else:
                     with col_m1:
                         st.info(f"""
                         📍 **Kondisi Sapi Saat Ini:**
+                        * **Kode Sapi:** {data_sapi.get('Kode Sapi', '-')}
                         * **Nomor RFID:** {selected_tag}
                         * **Varietas/Jenis:** {data_sapi['Jenis Sapi']}
                         * **Bobot Sekarang:** {data_sapi['Bobot Akhir (kg)']} kg
@@ -567,7 +582,7 @@ else:
                         if st.button("Proses Mutasi Sapi", type="primary", use_container_width=True):
                             df_sapi.at[idx, "Lokasi Pen"] = pen_tujuan
                             save_data(df_sapi)
-                            add_activity_log(user_name, "Mutasi Kandang", f"Memindahkan Sapi RFID {selected_tag} dari {kandang_asal} menuju {pen_tujuan}.")
+                            add_activity_log(user_name, "Mutasi Kandang", f"Memindahkan Sapi Kode {data_sapi.get('Kode Sapi', '-')} (RFID {selected_tag}) dari {kandang_asal} menuju {pen_tujuan}.")
                             st.success(f"🎉 Sukses! Sapi RFID {selected_tag} berhasil dipindahkan menuju {pen_tujuan}.")
                             st.rerun()
 
@@ -736,6 +751,7 @@ else:
         with st.form("form_registrasi"):
             col_a, col_b = st.columns(2)
             with col_a:
+                kode_sapi_inp = st.text_input("Kode Sapi (Internal)", placeholder="Contoh: SP-001")
                 tag_id = st.text_input("Nomor Tag / RFID Sapi")
                 jenis_sapi_sel = st.selectbox("Pilih Jenis Sapi", LIST_JENIS_SAPI)
                 jenis_kelamin = st.selectbox("Jenis Kelamin", ["Jantan", "Betina"])
@@ -747,12 +763,19 @@ else:
             
             if st.form_submit_button("Daftarkan Sapi Keluar Karantina", type="primary"):
                 if not tag_id: st.error("RFID wajib diisi!")
+                elif not kode_sapi_inp.strip(): st.error("Kode Sapi wajib diisi!")
                 elif not df_sapi.empty and tag_id in df_sapi["RFID/Tag"].values.astype(str): st.error("RFID sudah ada!")
                 else:
-                    new_cow = {"RFID/Tag": tag_id, "Jenis Sapi": jenis_sapi_sel, "Jenis Kelamin": jenis_kelamin, "Umur Masuk (Bulan)": int(umur_masuk), "Asal Negara": asal, "Tgl Masuk": tgl_masuk.strftime("%Y-%m-%d"), "Bobot Awal (kg)": bobot_awal, "Tgl Cek Akhir": tgl_masuk.strftime("%Y-%m-%d"), "Bobot Akhir (kg)": bobot_awal, "ADG (kg/hari)": 0.0, "Total Pakan (kg)": 0.0, "Tgl Pakan Terakhir": "-", "Lokasi Pen": "Pen Karantina"}
+                    new_cow = {
+                        "Kode Sapi": kode_sapi_inp.strip(), "RFID/Tag": tag_id, "Jenis Sapi": jenis_sapi_sel, 
+                        "Jenis Kelamin": jenis_kelamin, "Umur Masuk (Bulan)": int(umur_masuk), "Asal Negara": asal, 
+                        "Tgl Masuk": tgl_masuk.strftime("%Y-%m-%d"), "Bobot Awal (kg)": bobot_awal, 
+                        "Tgl Cek Akhir": tgl_masuk.strftime("%Y-%m-%d"), "Bobot Akhir (kg)": bobot_awal, 
+                        "ADG (kg/hari)": 0.0, "Total Pakan (kg)": 0.0, "Tgl Pakan Terakhir": "-", "Lokasi Pen": "Pen Karantina"
+                    }
                     df_sapi = pd.concat([df_sapi, pd.DataFrame([new_cow])], ignore_index=True)
                     save_data(df_sapi)
-                    add_activity_log(user_name, "Registrasi Sapi", f"Mendaftarkan sapi baru RFID: {tag_id} | Bobot: {bobot_awal} kg.")
+                    add_activity_log(user_name, "Registrasi Sapi", f"Mendaftarkan sapi baru Kode: {kode_sapi_inp.strip()} | RFID: {tag_id} | Bobot: {bobot_awal} kg.")
                     st.success("Berhasil didaftarkan!"); st.rerun()
 
     # ==================== MENU 7: INPUT PAKAN HARIAN ====================
@@ -764,7 +787,7 @@ else:
             selected_tag = st.selectbox("Pilih Nomor Tag / RFID Sapi", pilihan_sapi)
             idx = df_sapi[df_sapi["RFID/Tag"].astype(str) == selected_tag].index[0]
             data_sapi = df_sapi.loc[idx]
-            st.info(f"🐂 {data_sapi['Jenis Sapi']} | Pen: {data_sapi['Lokasi Pen']} | Total Pakan Saat Ini: {data_sapi['Total Pakan (kg)']} kg")
+            st.info(f"🐂 Kode: {data_sapi.get('Kode Sapi', '-')} | Jenis: {data_sapi['Jenis Sapi']} | Pen: {data_sapi['Lokasi Pen']} | Total Pakan Saat Ini: {data_sapi['Total Pakan (kg)']} kg")
             
             with st.form("form_pakan"):
                 tgl_pakan = st.date_input("Tanggal Pemberian Pakan", datetime.now())
@@ -773,7 +796,7 @@ else:
                     df_sapi.at[idx, "Total Pakan (kg)"] = float(data_sapi["Total Pakan (kg)"]) + pakan_hari_ini
                     df_sapi.at[idx, "Tgl Pakan Terakhir"] = tgl_pakan.strftime("%Y-%m-%d")
                     save_data(df_sapi)
-                    add_activity_log(user_name, "Input Pakan", f"Menambahkan pakan sebanyak {pakan_hari_ini} kg ke Sapi RFID {selected_tag}.")
+                    add_activity_log(user_name, "Input Pakan", f"Menambahkan pakan sebanyak {pakan_hari_ini} kg ke Sapi Kode {data_sapi.get('Kode Sapi', '-')} (RFID {selected_tag}).")
                     st.success("Pakan terupdate!"); st.rerun()
 
     # ==================== MENU 8: INPUT TIMBANGAN BERKALA ====================
@@ -785,7 +808,7 @@ else:
             selected_tag = st.selectbox("Pilih Nomor Tag / RFID Sapi", pilihan_sapi)
             idx = df_sapi[df_sapi["RFID/Tag"].astype(str) == selected_tag].index[0]
             data_sapi = df_sapi.loc[idx]
-            st.info(f"Bobot Terakhir: {data_sapi['Bobot Akhir (kg)']} kg")
+            st.info(f"🐂 Kode Sapi: {data_sapi.get('Kode Sapi', '-')} | Bobot Terakhir: {data_sapi['Bobot Akhir (kg)']} kg")
             
             with st.form("form_timbangan"):
                 tgl_akhir = st.date_input("Tanggal Penimbangan Baru", datetime.now())
@@ -796,7 +819,7 @@ else:
                     df_sapi.at[idx, "Bobot Akhir (kg)"] = bobot_akhir
                     df_sapi.at[idx, "ADG (kg/hari)"] = adg_baru
                     save_data(df_sapi)
-                    add_activity_log(user_name, "Timbangan Berkala", f"Mencatat bobot baru Sapi RFID {selected_tag} -> {bobot_akhir} kg.")
+                    add_activity_log(user_name, "Timbangan Berkala", f"Mencatat bobot baru Sapi Kode {data_sapi.get('Kode Sapi', '-')} (RFID {selected_tag}) -> {bobot_akhir} kg.")
                     st.success("Timbangan berhasil disimpan!"); st.rerun()
 
     # ==================== MENU 9: ANALISIS & GRAFIK PERFORMA ====================
@@ -814,8 +837,8 @@ else:
             with col_pop1:
                 st.markdown("#### 🏠 Jumlah Sapi per Pen / Kandang (Ekor)")
                 df_pop_pen = df_analisis.groupby("Lokasi Pen").size().reset_index(name="Jumlah (Ekor)")
-                df_pop_pen = pd.DataFrame({"Lokasi Pen": DAFTAR_PEN}).merge(df_pop_pen, on="Lokasi Pen", how="left").fillna(0)
-                st.bar_chart(data=df_pop_pen, x="Lokasi Pen", y="Jumlah (Ekor)", use_container_width=True)
+                df_pop_pen = pd.DataFrame({"Locations Pen": DAFTAR_PEN}).merge(df_pop_pen, left_on="Locations Pen", right_on="Lokasi Pen", how="left").fillna(0)
+                st.bar_chart(data=df_pop_pen, x="Locations Pen", y="Jumlah (Ekor)", use_container_width=True)
             with col_pop2:
                 st.markdown("#### 🐂 Jumlah Sapi berdasarkan Varietas (Ekor)")
                 st.bar_chart(data=df_analisis.groupby("Jenis Sapi").size().reset_index(name="Jumlah (Ekor)"), x="Jenis Sapi", y="Jumlah (Ekor)", use_container_width=True)
@@ -851,6 +874,7 @@ else:
                 col_p1, col_p2 = st.columns(2)
                 with col_p1:
                     st.info(f"""
+* **Kode Sapi:** {data_sapi.get('Kode Sapi', '-')}
 * **RFID/Tag:** {data_sapi['RFID/Tag']}
 * **Jenis Sapi:** {data_sapi['Jenis Sapi']}
 * **Lama Pelihara:** {hari_pelihara} Hari
@@ -870,9 +894,9 @@ else:
                             total_pendapatan = int(bobot_panen * harga_per_kg)
                             
                             data_panen_baru = {
-                                "RFID/Tag": data_sapi['RFID/Tag'], "Jenis Sapi": data_sapi['Jenis Sapi'],
-                                "Jenis Kelamin": data_sapi['Jenis Kelamin'], "Asal Negara": data_sapi['Asal Negara'],
-                                "Tgl Masuk": data_sapi['Tgl Masuk'], "Tgl Panen": tgl_panen.strftime("%Y-%m-%d"),
+                                "Kode Sapi": data_sapi.get('Kode Sapi', '-'), "RFID/Tag": data_sapi['RFID/Tag'], 
+                                "Jenis Sapi": data_sapi['Jenis Sapi'], "Jenis Kelamin": data_sapi['Jenis Kelamin'], 
+                                "Asal Negara": data_sapi['Asal Negara'], "Tgl Masuk": data_sapi['Tgl Masuk'], "Tgl Panen": tgl_panen.strftime("%Y-%m-%d"),
                                 "Lama Pelihara (Hari)": int(hari_pelihara), "Bobot Awal (kg)": data_sapi['Bobot Awal (kg)'],
                                 "Bobot Panen (kg)": bobot_panen, "Total Gain (kg)": total_gain,
                                 "Total Pakan (kg)": data_sapi['Total Pakan (kg)'], "FCR Akhir": fcr_final,
@@ -883,7 +907,7 @@ else:
                             save_panen_data(df_panen)
                             df_sapi = df_sapi.drop(idx)
                             save_data(df_sapi)
-                            add_activity_log(user_name, "Panen Sapi", f"Memanen Sapi RFID {selected_tag} | Pendapatan: Rp {total_pendapatan:,}")
+                            add_activity_log(user_name, "Panen Sapi", f"Memanen Sapi Kode {data_sapi.get('Kode Sapi', '-')} | Pendapatan: Rp {total_pendapatan:,}")
                             st.success(f"🎉 Sukses! Sapi RFID {selected_tag} Berhasil Dipanen.")
                             st.rerun()
                             
@@ -912,6 +936,7 @@ else:
             with st.form("form_edit"):
                 col1, col2 = st.columns(2)
                 with col1:
+                    new_kode = st.text_input("Koreksi Kode Sapi", value=str(data_sapi.get("Kode Sapi", "-")))
                     new_tag = st.text_input("Koreksi RFID", value=str(data_sapi["RFID/Tag"]))
                     new_jenis = st.selectbox("Jenis", LIST_JENIS_SAPI, index=LIST_JENIS_SAPI.index(data_sapi["Jenis Sapi"]) if data_sapi["Jenis Sapi"] in LIST_JENIS_SAPI else 0)
                     new_pen = st.selectbox("Koreksi Pen", DAFTAR_PEN, index=DAFTAR_PEN.index(data_sapi["Lokasi Pen"]) if data_sapi["Lokasi Pen"] in DAFTAR_PEN else 0)
@@ -920,13 +945,13 @@ else:
                     new_pakan = st.number_input("Total Pakan (kg)", min_value=0.0, value=float(data_sapi["Total Pakan (kg)"]) if pd.notna(data_sapi["Total Pakan (kg)"]) else 0.0)
                 
                 if st.form_submit_button("Simpan Perubahan"):
+                    df_sapi.at[idx, "Kode Sapi"] = new_kode.strip()
                     df_sapi.at[idx, "RFID/Tag"] = new_tag
-                    df_sapi.at[idx, "Jenis Sapi"] = new_jenis
                     df_sapi.at[idx, "Lokasi Pen"] = new_pen
                     df_sapi.at[idx, "Bobot Awal (kg)"] = new_bobot_awal
                     df_sapi.at[idx, "Total Pakan (kg)"] = new_pakan
                     save_data(df_sapi)
-                    add_activity_log(user_name, "Koreksi Data Cepat", f"Koreksi cepat Sapi RFID {selected_tag}.")
+                    add_activity_log(user_name, "Koreksi Data Cepat", f"Koreksi cepat Sapi Kode {new_kode.strip()} (RFID {selected_tag}).")
                     st.success("Koreksi berhasil!"); st.rerun()
 
     # ==================== MENU 12: LOG AKTIVITAS OPERATOR ====================
