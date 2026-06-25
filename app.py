@@ -35,23 +35,21 @@ if sheet:
 else:
     st.warning("⚠️ Aplikasi berjalan dalam mode LOKAL (Gagal terhubung ke Google Sheets).")
 
-# --- FUNGSI PEMBANTU BACA & TULIS SPREADSHEET TABS (SUDAH DIPERBAIKI SCR TOTAL) ---
+# --- FUNGSI PEMBANTU BACA & TULIS SPREADSHEET TABS ---
 def read_sheet_to_df(worksheet_name, default_cols):
     if not sheet:
         file_name = f"{worksheet_name}.csv"
         if os.path.exists(file_name): return pd.read_csv(file_name)
         return pd.DataFrame(columns=default_cols)
     try:
-        # Mengambil semua tab yang ada untuk mencocokkan nama secara aman (anti spasi & perbedaan huruf besar/kecil)
+        # Mengambil semua tab yang ada untuk mencocokkan nama secara aman
         worksheet_list = sheet.worksheets()
         existing_titles = {w.title.strip().lower(): w.title for w in worksheet_list}
         target_title = worksheet_name.strip().lower()
         
         if target_title in existing_titles:
-            # Jika ditemukan kecocokan, gunakan nama asli tab tersebut di Google Sheets
             worksheet = sheet.worksheet(existing_titles[target_title])
         else:
-            # Jika benar-benar belum ada, baru buat tab baru
             worksheet = sheet.add_worksheet(title=worksheet_name, rows="1000", cols="20")
             worksheet.append_row(default_cols)
             return pd.DataFrame(columns=default_cols)
@@ -379,7 +377,7 @@ else:
             tgl_a = pd.to_datetime(df_tampil["Tgl Cek Akhir"])
             
             df_tampil["Lama Peliharaan (Hari)"] = (tgl_a - tgl_m).dt.days
-            df_tampil["Umur Sekarang (Bulan)"] = (df_tampil["Umur Masuk (Bulan)"] + (df_tampil["Lama Peliharaan (Hari)"] / 30.4)).round(0).astype(int)
+            df_tampil["Umur Sekarang (Bulan)"] = (df_tampil["Umur Masuk (Bulan)"] + (df_tampil["Lama Peliharaan (Hari)"].fillna(0) / 30.4)).round(0).astype(int)
             df_tampil["Total Gain (kg)"] = df_tampil["Bobot Akhir (kg)"] - df_tampil["Bobot Awal (kg)"]
             
             df_tampil["FCR"] = df_tampil.apply(
@@ -483,20 +481,20 @@ else:
                             new_rfid = st.text_input("Koreksi Nomor RFID / Tag Baru", value=str(data_kor["RFID/Tag"]))
                             new_jenis = st.selectbox("Koreksi Jenis Sapi", LIST_JENIS_SAPI, index=LIST_JENIS_SAPI.index(data_kor["Jenis Sapi"]) if data_kor["Jenis Sapi"] in LIST_JENIS_SAPI else 0)
                             new_kelamin = st.selectbox("Koreksi Jenis Kelamin", ["Jantan", "Betina"], index=0 if data_kor["Jenis Kelamin"] == "Jantan" else 1)
-                            new_umur = st.number_input("Koreksi Umur Masuk (Bulan)", min_value=1, value=int(data_kor["Umur Masuk (Bulan)"]))
+                            new_umur = st.number_input("Koreksi Umur Masuk (Bulan)", min_value=1, value=int(data_kor["Umur Masuk (Bulan)"]) if pd.notna(data_kor["Umur Masuk (Bulan)"]) else 1)
                             new_asal = st.text_input("Koreksi Negara/Daerah Asal", value=str(data_kor["Asal Negara"]))
                             new_pen = st.selectbox("Koreksi Posisi Pen/Kandang", DAFTAR_PEN, index=DAFTAR_PEN.index(data_kor["Lokasi Pen"]) if data_kor["Lokasi Pen"] in DAFTAR_PEN else 0)
                         with col_k2:
                             try: tgl_m_curr = datetime.strptime(str(data_kor["Tgl Masuk"]), "%Y-%m-%d").date()
                             except: tgl_m_curr = datetime.now().date()
                             new_tgl_m = st.date_input("Koreksi Tanggal Masuk", value=tgl_m_curr)
-                            new_bobot_awal = st.number_input("Koreksi Bobot Awal Masuk (kg)", min_value=50.0, value=float(data_kor["Bobot Awal (kg)"]))
+                            new_bobot_awal = st.number_input("Koreksi Bobot Awal Masuk (kg)", min_value=50.0, value=float(data_kor["Bobot Awal (kg)"]) if pd.notna(data_kor["Bobot Awal (kg)"]) else 50.0)
                             
                             try: tgl_a_curr = datetime.strptime(str(data_kor["Tgl Cek Akhir"]), "%Y-%m-%d").date()
                             except: tgl_a_curr = datetime.now().date()
                             new_tgl_a = st.date_input("Koreksi Tanggal Timbangan/Cek Akhir", value=tgl_a_curr)
-                            new_bobot_akhir = st.number_input("Koreksi Bobot Akhir Sekarang (kg)", min_value=50.0, value=float(data_kor["Bobot Akhir (kg)"]))
-                            new_pakan = st.number_input("Koreksi Akumulasi Pakan Terkonsumsi (kg)", min_value=0.0, value=float(data_kor["Total Pakan (kg)"]))
+                            new_bobot_akhir = st.number_input("Koreksi Bobot Akhir Sekarang (kg)", min_value=50.0, value=float(data_kor["Bobot Akhir (kg)"]) if pd.notna(data_kor["Bobot Akhir (kg)"]) else 50.0)
+                            new_pakan = st.number_input("Koreksi Akumulasi Pakan Terkonsumsi (kg)", min_value=0.0, value=float(data_kor["Total Pakan (kg)"]) if pd.notna(data_kor["Total Pakan (kg)"]) else 0.0)
                         
                         akses_diberikan = True
                         if user_role == "Operator":
@@ -918,8 +916,8 @@ else:
                     new_jenis = st.selectbox("Jenis", LIST_JENIS_SAPI, index=LIST_JENIS_SAPI.index(data_sapi["Jenis Sapi"]) if data_sapi["Jenis Sapi"] in LIST_JENIS_SAPI else 0)
                     new_pen = st.selectbox("Koreksi Pen", DAFTAR_PEN, index=DAFTAR_PEN.index(data_sapi["Lokasi Pen"]) if data_sapi["Lokasi Pen"] in DAFTAR_PEN else 0)
                 with col2:
-                    new_bobot_awal = st.number_input("Bobot Awal (kg)", min_value=50.0, value=float(data_sapi["Bobot Awal (kg)"]))
-                    new_pakan = st.number_input("Total Pakan (kg)", min_value=0.0, value=float(data_sapi["Total Pakan (kg)"]))
+                    new_bobot_awal = st.number_input("Bobot Awal (kg)", min_value=50.0, value=float(data_sapi["Bobot Awal (kg)"]) if pd.notna(data_sapi["Bobot Awal (kg)"]) else 50.0)
+                    new_pakan = st.number_input("Total Pakan (kg)", min_value=0.0, value=float(data_sapi["Total Pakan (kg)"]) if pd.notna(data_sapi["Total Pakan (kg)"]) else 0.0)
                 
                 if st.form_submit_button("Simpan Perubahan"):
                     df_sapi.at[idx, "RFID/Tag"] = new_tag
@@ -934,35 +932,37 @@ else:
     # ==================== MENU 12: LOG AKTIVITAS OPERATOR ====================
     elif menu == "📜 Log Aktivitas Operator":
         st.subheader("📜 Log Riwayat Aktivitas Harian Operator")
-        if not os.path.exists(LOGS_FILE): st.info("Belum ada log.")
+        cols_log = ["Tanggal & Waktu", "Operator", "Aktivitas", "Detail Keterangan"]
+        df_logs = read_sheet_to_df("log_aktivitas", cols_log)
+        
+        if df_logs.empty: 
+            st.info("Belum ada log.")
         else:
-            df_logs = pd.read_csv(LOGS_FILE)
-            if df_logs.empty: st.info("Belum ada log.")
+            col_log1, col_log2, col_log3 = st.columns(3)
+            with col_log1:
+                filter_op = st.selectbox("Filter Operator", ["Semua"] + sorted(df_logs["Operator"].dropna().unique().tolist()))
+            with col_log2:
+                filter_act = st.selectbox("Filter Aktivitas", ["Semua"] + sorted(df_logs["Aktivitas"].dropna().unique().tolist()))
+            with col_log3:
+                search_detail = st.text_input("Cari Kata Kunci Detail")
+
+            df_logs_filtered = df_logs.copy()
+            if filter_op != "Semua": df_logs_filtered = df_logs_filtered[df_logs_filtered["Operator"] == filter_op]
+            if filter_act != "Semua": df_logs_filtered = df_logs_filtered[df_logs_filtered["Aktivitas"] == filter_act]
+            if search_detail.strip(): df_logs_filtered = df_logs_filtered[df_logs_filtered["Detail Keterangan"].astype(str).str.contains(search_detail.strip(), case=False)]
+
+            if not df_logs_filtered.empty:
+                df_logs_filtered = df_logs_filtered.iloc[::-1].reset_index(drop=True)
+                df_logs_filtered.index = range(1, len(df_logs_filtered) + 1)
+                st.dataframe(df_logs_filtered, use_container_width=True)
             else:
-                col_log1, col_log2, col_log3 = st.columns(3)
-                with col_log1:
-                    filter_op = st.selectbox("Filter Operator", ["Semua"] + sorted(df_logs["Operator"].dropna().unique().tolist()))
-                with col_log2:
-                    filter_act = st.selectbox("Filter Aktivitas", ["Semua"] + sorted(df_logs["Aktivitas"].dropna().unique().tolist()))
-                with col_log3:
-                    search_detail = st.text_input("Cari Kata Kunci Detail")
-
-                df_logs_filtered = df_logs.copy()
-                if filter_op != "Semua": df_logs_filtered = df_logs_filtered[df_logs_filtered["Operator"] == filter_op]
-                if filter_act != "Semua": df_logs_filtered = df_logs_filtered[df_logs_filtered["Aktivitas"] == filter_act]
-                if search_detail.strip(): df_logs_filtered = df_logs_filtered[df_logs_filtered["Detail Keterangan"].astype(str).str.contains(search_detail.strip(), case=False)]
-
-                if not df_logs_filtered.empty:
-                    df_logs_filtered = df_logs_filtered.iloc[::-1].reset_index(drop=True)
-                    df_logs_filtered.index = range(1, len(df_logs_filtered) + 1)
-                    st.dataframe(df_logs_filtered, use_container_width=True)
-                else:
-                    st.info("Log tidak ditemukan berdasarkan kriteria filter.")
-                
-                st.markdown("---")
-                if st.button("🗑️ Bersihkan Semua Log Aktivitas", type="secondary"):
-                    if st.session_state["role"] == "Admin":
-                        pd.DataFrame(columns=["Tanggal & Waktu", "Operator", "Aktivitas", "Detail Keterangan"]).to_csv(LOGS_FILE, index=False)
-                        st.success("Log berhasil dibersihkan!")
-                        st.rerun()
-                    else: st.error("❌ Hanya Admin yang bisa menghapus log.")
+                st.info("Log tidak ditemukan berdasarkan kriteria filter.")
+            
+            st.markdown("---")
+            if st.button("🗑️ Bersihkan Semua Log Aktivitas", type="secondary"):
+                if st.session_state["role"] == "Admin":
+                    write_df_to_sheet("log_aktivitas", pd.DataFrame(columns=cols_log), cols_log)
+                    st.success("Log berhasil dibersihkan!")
+                    st.rerun()
+                else: 
+                    st.error("❌ Hanya Admin yang bisa menghapus log.")
