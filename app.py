@@ -4,6 +4,7 @@ from datetime import datetime
 import os
 import gspread
 from google.oauth2.service_account import Credentials
+import time  # Ditambahkan untuk memberi jeda otomatis jika Google Sheets sibuk
 
 # --- 1. PERBAIKAN: set_page_config HARUS DI PALING ATAS ---
 st.set_page_config(page_title="Sistem Penggemukan Sapi", layout="wide")
@@ -41,44 +42,62 @@ def read_sheet_to_df(worksheet_name, default_cols):
         file_name = f"{worksheet_name}.csv"
         if os.path.exists(file_name): return pd.read_csv(file_name)
         return pd.DataFrame(columns=default_cols)
-    try:
-        # Mengambil semua tab yang ada untuk mencocokkan nama secara aman
-        worksheet_list = sheet.worksheets()
-        existing_titles = {w.title.strip().lower(): w.title for w in worksheet_list}
-        target_title = worksheet_name.strip().lower()
         
-        if target_title in existing_titles:
-            worksheet = sheet.worksheet(existing_titles[target_title])
-        else:
-            worksheet = sheet.add_worksheet(title=worksheet_name, rows="1000", cols="20")
-            worksheet.append_row(default_cols)
-            return pd.DataFrame(columns=default_cols)
+    # Mencoba ulang otomatis sampai 3 kali jika Google Sheets mendadak sibuk
+    for percobaan in range(3):
+        try:
+            worksheet_list = sheet.worksheets()
+            existing_titles = {w.title.strip().lower(): w.title for w in worksheet_list}
+            target_title = worksheet_name.strip().lower()
             
-        data = worksheet.get_all_records()
-        if not data: return pd.DataFrame(columns=default_cols)
-        return pd.DataFrame(data)
-    except Exception as e:
-        st.error(f"Error membaca tab {worksheet_name}: {e}")
-        return pd.DataFrame(columns=default_cols)
+            if target_title in existing_titles:
+                worksheet = sheet.worksheet(existing_titles[target_title])
+            else:
+                worksheet = sheet.add_worksheet(title=worksheet_name, rows="1000", cols="20")
+                worksheet.append_row(default_cols)
+                return pd.DataFrame(columns=default_cols)
+                
+            data = worksheet.get_all_records()
+            if not data: return pd.DataFrame(columns=default_cols)
+            return pd.DataFrame(data)
+            
+        except Exception as e:
+            if percobaan < 2:
+                time.sleep(1) # Tunggu 1 detik lalu coba lagi secara otomatis
+                continue
+            else:
+                # Jika sudah 3 kali gagal, gunakan database cadangan lokal (.csv) agar tidak macet
+                st.warning(f"⚠️ Koneksi Google Sheets sibuk sesaat. Menggunakan data cadangan lokal.")
+                file_name = f"{worksheet_name}.csv"
+                if os.path.exists(file_name): return pd.read_csv(file_name)
+                return pd.DataFrame(columns=default_cols)
 
 def write_df_to_sheet(worksheet_name, df, default_cols):
     df = df.reindex(columns=default_cols).fillna("")
-    df.to_csv(f"{worksheet_name}.csv", index=False) # Backup lokal tetap dibuat
+    df.to_csv(f"{worksheet_name}.csv", index=False) # Selalu buat cadangan lokal demi keamanan data
     if not sheet: return
-    try:
-        worksheet_list = sheet.worksheets()
-        existing_titles = {w.title.strip().lower(): w.title for w in worksheet_list}
-        target_title = worksheet_name.strip().lower()
-        
-        if target_title in existing_titles:
-            worksheet = sheet.worksheet(existing_titles[target_title])
-        else:
-            worksheet = sheet.add_worksheet(title=worksheet_name, rows="1000", cols="20")
+    
+    # Mencoba menyimpan ulang otomatis sampai 3 kali jika Google Sheets mendadak sibuk
+    for percobaan in range(3):
+        try:
+            worksheet_list = sheet.worksheets()
+            existing_titles = {w.title.strip().lower(): w.title for w in worksheet_list}
+            target_title = worksheet_name.strip().lower()
             
-        worksheet.clear()
-        worksheet.update(range_name='A1', values=[df.columns.values.tolist()] + df.values.tolist())
-    except Exception as e:
-        st.error(f"Gagal menyimpan data ke Google Sheets ({worksheet_name}): {e}")
+            if target_title in existing_titles:
+                worksheet = sheet.worksheet(existing_titles[target_title])
+            else:
+                worksheet = sheet.add_worksheet(title=worksheet_name, rows="1000", cols="20")
+                
+            worksheet.clear()
+            worksheet.update(range_name='A1', values=[df.columns.values.tolist()] + df.values.tolist())
+            break # Keluar jika pengiriman data sukses
+        except Exception as e:
+            if percobaan < 2:
+                time.sleep(1.5) # Beri jeda 1.5 detik sebelum mencoba menulis ulang
+                continue
+            else:
+                st.error(f"❌ Gagal sinkronisasi data ke Google Sheets ({worksheet_name}). Data tetap aman tersimpan di komputer kandang.")
 
 # Master Daftar Pen/Kandang
 DAFTAR_PEN = [
