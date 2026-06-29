@@ -1,0 +1,6 @@
+# Abaikan folder cache Python
+__pycache__/
+*.pyc
+
+# Rekomendasi tambahan: Abaikan database cadangan lokal agar tidak bocor ke GitHub
+*.csv
