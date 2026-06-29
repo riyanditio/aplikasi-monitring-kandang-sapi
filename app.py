@@ -21,10 +21,7 @@ from menu.dashboard import tampilkan_dashboard
 # --- 1. PERBAIKAN: set_page_config HARUS DI PALING ATAS ---
 st.set_page_config(page_title="Sistem Penggemukan Sapi", layout="wide")
 
-# GLOBAL VARIABLE UNTUK KONEKSI
-sheet = None
-
-# --- KONEKSI GOOGLE SHEETS MENGGUNAKAN GSPREAD ---
+# --- KONEKSI GOOGLE SHEETS MENGGUNAKAN GSPREAD (GLOBAL CACHED) ---
 @st.cache_resource
 def get_google_sheet():
     try:
@@ -38,6 +35,9 @@ def get_google_sheet():
         return client.open_by_key(sheet_id)
     except Exception as e:
         return None
+
+# Hubungkan secara global agar sistem autentikasi login dapat mengakses database akun di Google Sheets
+sheet = get_google_sheet()
 
 # --- FUNGSI PEMBANTU BACA & TULIS SPREADSHEET TABS ---
 def read_sheet_to_df(worksheet_name, default_cols):
@@ -213,7 +213,7 @@ def load_data():
 
 def save_data(df):
     cols = ["Kode Sapi", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Umur Masuk (Bulan)", "Asal Negara", "Tgl Masuk", "Bobot Awal (kg)", "Tgl Cek Akhir", "Bobot Akhir (kg)", "ADG (kg/hari)", "Total Pakan (kg)", "Tgl Pakan Terakhir", "Lokasi Pen"]
-    write_df_to_sheet("data_sapi", df, cols)
+    save_data(df)
 
 def load_panen_data():
     cols = ["Kode Sapi", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Asal Negara", "Tgl Masuk", "Tgl Panen", "Lama Pelihara (Hari)", "Bobot Awal (kg)", "Bobot Panen (kg)", "Total Gain (kg)", "Total Pakan (kg)", "FCR Akhir", "ADG Akhir (kg/hari)", "Harga Jual /kg (Rp)", "Total Pendapatan (Rp)", "Pembeli/Tujuan"]
@@ -293,10 +293,7 @@ if not st.session_state["logged_in"]:
 
 # --- KONDISI SUDAH LOGIN (PERBAIKAN PERFORMA DI SINI) ---
 else:
-    # 1. Hubungkan ke Google Sheets secara global (Hanya saat sudah masuk aplikasi)
-    sheet = get_google_sheet()
-    
-    # 2. Ambil data dari Sheets / CSV (Hanya dipanggil setelah operator terverifikasi)
+    # Ambil data berat dari Sheets / CSV (Hanya dipanggil setelah operator terverifikasi)
     df_sapi = load_data()
     df_panen = load_panen_data()
     df_truk = load_truk_data()
