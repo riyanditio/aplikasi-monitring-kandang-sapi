@@ -101,8 +101,22 @@ def write_df_to_sheet(worksheet_name, df, default_cols):
             else:
                 st.error(f"❌ Gagal sinkronisasi data ke Google Sheets ({worksheet_name}). Data tetap aman tersimpan di komputer kandang.")
 
-# Master Data Konfigurasi Aplikasi
-DAFTAR_PEN = ["Pen Karantina", "Pen A (Bobot < 350kg)", "Pen B (Bobot 350-450kg)", "Pen C (Bobot > 450kg)", "Pen D (Khusus/Isolasi Sakit)"]
+# ==================== MASTER DATA KONFIGURASI APLIKASI ====================
+# Penyesuaian Struktur Hirarki: 1 Area Kandang -> Beberapa Blok Kandang -> Beberapa Pen
+STRUKTUR_KANDANG = {
+    "Blok Karantina": ["Pen Karantina 1", "Pen Karantina 2", "Pen Karantina 3"],
+    "Blok Penggemukan A (Bobot < 350kg)": ["Pen A1", "Pen A2", "Pen A3"],
+    "Blok Penggemukan B (Bobot 350-450kg)": ["Pen B1", "Pen B2", "Pen B3"],
+    "Blok Penggemukan C (Bobot > 450kg)": ["Pen C1", "Pen C2", "Pen C3"],
+    "Blok Isolasi & Perawatan (Sakit)": ["Pen Isolasi 1", "Pen Isolasi 2"]
+}
+
+# Auto-generate DAFTAR_PEN gabungan untuk menyuplai menu registrasi, pakan, grafik, & edit data
+DAFTAR_PEN = []
+for blok, daftar_pen_di_blok in STRUKTUR_KANDANG.items():
+    for pen in daftar_pen_di_blok:
+        DAFTAR_PEN.append(f"{blok} - {pen}")
+
 DEFAULT_JENIS_SAPI = ["Brahman Cross", "Simental", "Limosin", "Hereford", "Sapi Lokal (Bali)", "Sapi Lokal (Madura)", "Sapi Lokal (PO/Peranakan Ongole)", "Ex Impor"]
 ALL_MENUS = ["📊 Dashboard & Tabel Monitor", "🏠 Manajemen Pen & Mutasi Sapi", "🐂 Kelola Master Jenis Sapi", "👥 Manajemen Akun Operator", "🚛 Timbangan Armada Truk", "➕ Registrasi Sapi Baru", "🍽️ Input Pakan Harian", "⚖️ Input Timbangan Berkala", "📈 Analisis & Grafik Performa", "💰 Manajemen Panen & Penjualan", "⚙️ Edit & Hapus Data", "📜 Log Aktivitas Operator"]
 
@@ -216,7 +230,6 @@ def load_data():
         
     return df.reindex(columns=cols)
 
-# --- PERBAIKAN DI BARIS INI: Mengarahkan penyimpanan dengan benar ke Sheets/CSV ---
 def save_data(df):
     cols = ["Kode Sapi", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Umur Masuk (Bulan)", "Asal Negara", "Tgl Masuk", "Bobot Awal (kg)", "Tgl Cek Akhir", "Bobot Akhir (kg)", "ADG (kg/hari)", "Total Pakan (kg)", "Tgl Pakan Terakhir", "Lokasi Pen"]
     write_df_to_sheet("data_sapi", df, cols)
