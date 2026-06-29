@@ -21,41 +21,32 @@ from menu.dashboard import tampilkan_dashboard
 # --- 1. PERBAIKAN: set_page_config HARUS DI PALING ATAS ---
 st.set_page_config(page_title="Sistem Penggemukan Sapi", layout="wide")
 
+# GLOBAL VARIABLE UNTUK KONEKSI
+sheet = None
+
 # --- KONEKSI GOOGLE SHEETS MENGGUNAKAN GSPREAD ---
 @st.cache_resource
 def get_google_sheet():
     try:
         scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-        # Mengambil kredensial akun robot dari secrets.toml
         creds = Credentials.from_service_account_info(
             st.secrets["gcp_service_account"], 
             scopes=scopes
         )
         client = gspread.authorize(creds)
-        # Mengambil ID spreadsheet dari secrets.toml
         sheet_id = st.secrets["spreadsheet_id"]
-        sheet = client.open_by_key(sheet_id)
-        return sheet
+        return client.open_by_key(sheet_id)
     except Exception as e:
-        st.error(f"Gagal terhubung ke Google Sheets: {e}")
         return None
-
-# Hubungkan ke Google Sheets secara global
-sheet = get_google_sheet()
-
-if sheet:
-    st.success("Aplikasi ini sekarang terhubung online dengan Google Sheets! 🚀")
-else:
-    st.warning("⚠️ Aplikasi berjalan dalam mode LOKAL (Gagal terhubung ke Google Sheets).")
 
 # --- FUNGSI PEMBANTU BACA & TULIS SPREADSHEET TABS ---
 def read_sheet_to_df(worksheet_name, default_cols):
+    global sheet
     if not sheet:
         file_name = f"{worksheet_name}.csv"
         if os.path.exists(file_name): return pd.read_csv(file_name)
         return pd.DataFrame(columns=default_cols)
         
-    # Mencoba ulang otomatis sampai 3 kali jika Google Sheets mendadak sibuk
     for percobaan in range(3):
         try:
             worksheet_list = sheet.worksheets()
@@ -75,21 +66,20 @@ def read_sheet_to_df(worksheet_name, default_cols):
             
         except Exception as e:
             if percobaan < 2:
-                time.sleep(1) # Tunggu 1 detik lalu coba lagi secara otomatis
+                time.sleep(1)
                 continue
             else:
-                # Jika sudah 3 kali gagal, gunakan database cadangan lokal (.csv) agar tidak macet
                 st.warning(f"⚠️ Koneksi Google Sheets sibuk sesaat. Menggunakan data cadangan lokal.")
                 file_name = f"{worksheet_name}.csv"
                 if os.path.exists(file_name): return pd.read_csv(file_name)
                 return pd.DataFrame(columns=default_cols)
 
 def write_df_to_sheet(worksheet_name, df, default_cols):
+    global sheet
     df = df.reindex(columns=default_cols).fillna("")
-    df.to_csv(f"{worksheet_name}.csv", index=False) # Selalu buat cadangan lokal demi keamanan data
+    df.to_csv(f"{worksheet_name}.csv", index=False)
     if not sheet: return
     
-    # Mencoba menyimpan ulang otomatis sampai 3 kali jika Google Sheets mendadak sibuk
     for percobaan in range(3):
         try:
             worksheet_list = sheet.worksheets()
@@ -103,45 +93,18 @@ def write_df_to_sheet(worksheet_name, df, default_cols):
                 
             worksheet.clear()
             worksheet.update(range_name='A1', values=[df.columns.values.tolist()] + df.values.tolist())
-            break # Keluar jika pengiriman data sukses
+            break
         except Exception as e:
             if percobaan < 2:
-                time.sleep(1.5) # Beri jeda 1.5 detik sebelum mencoba menulis ulang
+                time.sleep(1.5)
                 continue
             else:
                 st.error(f"❌ Gagal sinkronisasi data ke Google Sheets ({worksheet_name}). Data tetap aman tersimpan di komputer kandang.")
 
-# Master Daftar Pen/Kandang
-DAFTAR_PEN = [
-    "Pen Karantina", 
-    "Pen A (Bobot < 350kg)", 
-    "Pen B (Bobot 350-450kg)", 
-    "Pen C (Bobot > 450kg)",
-    "Pen D (Khusus/Isolasi Sakit)"
-]
-
-# Master Jenis Sapi Bawaan (Default)
-DEFAULT_JENIS_SAPI = [
-    "Brahman Cross", "Simental", "Limosin", "Hereford", 
-    "Sapi Lokal (Bali)", "Sapi Lokal (Madura)", "Sapi Lokal (PO/Peranakan Ongole)", 
-    "Ex Impor"
-]
-
-# Master Seluruh Menu Aplikasi
-ALL_MENUS = [
-    "📊 Dashboard & Tabel Monitor", 
-    "🏠 Manajemen Pen & Mutasi Sapi", 
-    "🐂 Kelola Master Jenis Sapi", 
-    "👥 Manajemen Akun Operator", 
-    "🚛 Timbangan Armada Truk",
-    "➕ Registrasi Sapi Baru", 
-    "🍽️ Input Pakan Harian", 
-    "⚖️ Input Timbangan Berkala", 
-    "📈 Analisis & Grafik Performa",
-    "💰 Manajemen Panen & Penjualan",
-    "⚙️ Edit & Hapus Data",
-    "📜 Log Aktivitas Operator"
-]
+# Master Data Konfigurasi Aplikasi
+DAFTAR_PEN = ["Pen Karantina", "Pen A (Bobot < 350kg)", "Pen B (Bobot 350-450kg)", "Pen C (Bobot > 450kg)", "Pen D (Khusus/Isolasi Sakit)"]
+DEFAULT_JENIS_SAPI = ["Brahman Cross", "Simental", "Limosin", "Hereford", "Sapi Lokal (Bali)", "Sapi Lokal (Madura)", "Sapi Lokal (PO/Peranakan Ongole)", "Ex Impor"]
+ALL_MENUS = ["📊 Dashboard & Tabel Monitor", "🏠 Manajemen Pen & Mutasi Sapi", "🐂 Kelola Master Jenis Sapi", "👥 Manajemen Akun Operator", "🚛 Timbangan Armada Truk", "➕ Registrasi Sapi Baru", "🍽️ Input Pakan Harian", "⚖️ Input Timbangan Berkala", "📈 Analisis & Grafik Performa", "💰 Manajemen Panen & Penjualan", "⚙️ Edit & Hapus Data", "📜 Log Aktivitas Operator"]
 
 # --- FUNGSI MENCATAT LOG RIWAYAT AKTIVITAS ---
 def add_activity_log(operator, aktivitas, detail):
@@ -156,19 +119,11 @@ def add_activity_log(operator, aktivitas, detail):
     df = pd.concat([df, pd.DataFrame([new_log])], ignore_index=True)
     write_df_to_sheet("log_aktivitas", df, cols)
 
-# --- FUNGSI UTAMA UNTUK MANAJEMEN AKUN (DATABASE USERS) ---
+# --- FUNGSI UTAMA UNTUK MANAJEMEN AKUN ---
 def load_users():
     cols = ["Username", "Password", "Role", "Menus"]
     default_admin_menus = "|".join(ALL_MENUS)
-    default_op_menus = "|".join([
-        "📊 Dashboard & Tabel Monitor", 
-        "🏠 Manajemen Pen & Mutasi Sapi", 
-        "🚛 Timbangan Armada Truk",
-        "➕ Registrasi Sapi Baru", 
-        "🍽️ Input Pakan Harian", 
-        "⚖️ Input Timbangan Berkala", 
-        "📈 Analisis & Grafik Performa"
-    ])
+    default_op_menus = "|".join(["📊 Dashboard & Tabel Monitor", "🏠 Manajemen Pen & Mutasi Sapi", "🚛 Timbangan Armada Truk", "➕ Registrasi Sapi Baru", "🍽️ Input Pakan Harian", "⚖️ Input Timbangan Berkala", "📈 Analisis & Grafik Performa"])
     
     try:
         admin_pwd = st.secrets["ADMIN_PASSWORD"]
@@ -215,24 +170,15 @@ def save_users(df):
     cols = ["Username", "Password", "Role", "Menus"]
     write_df_to_sheet("users", df, cols)
 
-# --- FUNGSI MUAT DATA TIMBANGAN TRUK ---
+# --- DATA LOADER FUNCTIONS ---
 def load_truk_data():
-    cols = [
-        "No Transaksi", "Tanggal", "No Plat / Armada", "Keterangan Muatan", 
-        "Bruto / Kotor (kg)", "Tara / Kosong (kg)", "Netto / Bersih (kg)", 
-        "Jumlah Sapi (Ekor)", "Rata-rata / Ekor (kg)", "Operator Lapangan"
-    ]
+    cols = ["No Transaksi", "Tanggal", "No Plat / Armada", "Keterangan Muatan", "Bruto / Kotor (kg)", "Tara / Kosong (kg)", "Netto / Bersih (kg)", "Jumlah Sapi (Ekor)", "Rata-rata / Ekor (kg)", "Operator Lapangan"]
     return read_sheet_to_df("timbangan_truk", cols)
 
 def save_truk_data(df):
-    cols = [
-        "No Transaksi", "Tanggal", "No Plat / Armada", "Keterangan Muatan", 
-        "Bruto / Kotor (kg)", "Tara / Kosong (kg)", "Netto / Bersih (kg)", 
-        "Jumlah Sapi (Ekor)", "Rata-rata / Ekor (kg)", "Operator Lapangan"
-    ]
+    cols = ["No Transaksi", "Tanggal", "No Plat / Armada", "Keterangan Muatan", "Bruto / Kotor (kg)", "Tara / Kosong (kg)", "Netto / Bersih (kg)", "Jumlah Sapi (Ekor)", "Rata-rata / Ekor (kg)", "Operator Lapangan"]
     write_df_to_sheet("timbangan_truk", df, cols)
 
-# --- FUNGSI UTAMA UNTUK MASTER JENIS SAPI ---
 def load_jenis_sapi():
     cols = ["Jenis Sapi"]
     df = read_sheet_to_df("jenis_sapi", cols)
@@ -248,80 +194,44 @@ def save_jenis_sapi(list_jenis):
     df = pd.DataFrame({"Jenis Sapi": list_jenis})
     write_df_to_sheet("jenis_sapi", df, cols)
 
-# --- FUNGSI MUAT DATA SAPI AKTIF ---
 def load_data():
-    cols = [
-        "Kode Sapi", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Umur Masuk (Bulan)", "Asal Negara", 
-        "Tgl Masuk", "Bobot Awal (kg)", "Tgl Cek Akhir", "Bobot Akhir (kg)", "ADG (kg/hari)",
-        "Total Pakan (kg)", "Tgl Pakan Terakhir", "Lokasi Pen"
-    ]
+    cols = ["Kode Sapi", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Umur Masuk (Bulan)", "Asal Negara", "Tgl Masuk", "Bobot Awal (kg)", "Tgl Cek Akhir", "Bobot Akhir (kg)", "ADG (kg/hari)", "Total Pakan (kg)", "Tgl Pakan Terakhir", "Lokasi Pen"]
     df = read_sheet_to_df("data_sapi", cols)
     
-    if df.empty:
-        return pd.DataFrame(columns=cols)
-        
-    if "Ras Sapi" in df.columns:
-        df = df.rename(columns={"Ras Sapi": "Jenis Sapi"})
+    if df.empty: return pd.DataFrame(columns=cols)
+    if "Ras Sapi" in df.columns: df = df.rename(columns={"Ras Sapi": "Jenis Sapi"})
     if "Umur Sapi" in df.columns:
         df["Umur Masuk (Bulan)"] = 12
         df = df.drop(columns=["Umur Sapi"])
-    
-    # Toleransi untuk data lama yang belum punya kolom 'Kode Sapi'
-    if "Kode Sapi" not in df.columns:
-        df["Kode Sapi"] = "-"
+    if "Kode Sapi" not in df.columns: df["Kode Sapi"] = "-"
+    if "Jenis Kelamin" not in df.columns: df["Jenis Kelamin"] = "Jantan"
+    if "Total Pakan (kg)" not in df.columns: df["Total Pakan (kg)"] = 0.0
+    if "Tgl Pakan Terakhir" not in df.columns: df["Tgl Pakan Terakhir"] = "-"
+    if "Lokasi Pen" not in df.columns: df["Lokasi Pen"] = "Pen Karantina"
         
-    if "Jenis Kelamin" not in df.columns:
-        df["Jenis Kelamin"] = "Jantan"
-    if "Total Pakan (kg)" not in df.columns:
-        df["Total Pakan (kg)"] = 0.0
-    if "Tgl Pakan Terakhir" not in df.columns:
-        df["Tgl Pakan Terakhir"] = "-"
-    if "Lokasi Pen" not in df.columns:
-        df["Lokasi Pen"] = "Pen Karantina"
-        
-    df = df.reindex(columns=cols)
-    return df
+    return df.reindex(columns=cols)
 
 def save_data(df):
-    cols = [
-        "Kode Sapi", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Umur Masuk (Bulan)", "Asal Negara", 
-        "Tgl Masuk", "Bobot Awal (kg)", "Tgl Cek Akhir", "Bobot Akhir (kg)", "ADG (kg/hari)",
-        "Total Pakan (kg)", "Tgl Pakan Terakhir", "Lokasi Pen"
-    ]
+    cols = ["Kode Sapi", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Umur Masuk (Bulan)", "Asal Negara", "Tgl Masuk", "Bobot Awal (kg)", "Tgl Cek Akhir", "Bobot Akhir (kg)", "ADG (kg/hari)", "Total Pakan (kg)", "Tgl Pakan Terakhir", "Lokasi Pen"]
     write_df_to_sheet("data_sapi", df, cols)
 
-# --- FUNGSI MUAT DATA PANEN ---
 def load_panen_data():
-    cols = [
-        "Kode Sapi", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Asal Negara", "Tgl Masuk", "Tgl Panen",
-        "Lama Pelihara (Hari)", "Bobot Awal (kg)", "Bobot Panen (kg)", "Total Gain (kg)",
-        "Total Pakan (kg)", "FCR Akhir", "ADG Akhir (kg/hari)", "Harga Jual /kg (Rp)", "Total Pendapatan (Rp)", "Pembeli/Tujuan"
-    ]
+    cols = ["Kode Sapi", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Asal Negara", "Tgl Masuk", "Tgl Panen", "Lama Pelihara (Hari)", "Bobot Awal (kg)", "Bobot Panen (kg)", "Total Gain (kg)", "Total Pakan (kg)", "FCR Akhir", "ADG Akhir (kg/hari)", "Harga Jual /kg (Rp)", "Total Pendapatan (Rp)", "Pembeli/Tujuan"]
     df = read_sheet_to_df("data_panen", cols)
-    if "Kode Sapi" not in df.columns and not df.empty:
-        df["Kode Sapi"] = "-"
+    if "Kode Sapi" not in df.columns and not df.empty: df["Kode Sapi"] = "-"
     return df
 
 def save_panen_data(df):
-    cols = [
-        "Kode Sapi", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Asal Negara", "Tgl Masuk", "Tgl Panen",
-        "Lama Pelihara (Hari)", "Bobot Awal (kg)", "Bobot Panen (kg)", "Total Gain (kg)",
-        "Total Pakan (kg)", "FCR Akhir", "ADG Akhir (kg/hari)", "Harga Jual /kg (Rp)", "Total Pendapatan (Rp)", "Pembeli/Tujuan"
-    ]
+    cols = ["Kode Sapi", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Asal Negara", "Tgl Masuk", "Tgl Panen", "Lama Pelihara (Hari)", "Bobot Awal (kg)", "Bobot Panen (kg)", "Total Gain (kg)", "Total Pakan (kg)", "FCR Akhir", "ADG Akhir (kg/hari)", "Harga Jual /kg (Rp)", "Total Pendapatan (Rp)", "Pembeli/Tujuan"]
     write_df_to_sheet("data_panen", df, cols)
 
 def calculate_adg(tgl_masuk, bobot_awal, tgl_akhir, bobot_akhir):
     try:
-        if isinstance(tgl_masuk, str):
-            tgl_masuk = datetime.strptime(tgl_masuk, "%Y-%m-%d").date()
-        if isinstance(tgl_akhir, str):
-            tgl_akhir = datetime.strptime(tgl_akhir, "%Y-%m-%d").date()
-        
+        if isinstance(tgl_masuk, str): tgl_masuk = datetime.strptime(tgl_masuk, "%Y-%m-%d").date()
+        if isinstance(tgl_akhir, str): tgl_akhir = datetime.strptime(tgl_akhir, "%Y-%m-%d").date()
         selisih_hari = (tgl_akhir - tgl_masuk).days
-        if selisih_hari > 0:
-            return round((bobot_akhir - bobot_awal) / selisih_hari, 2)
-    except:
-        pass
+        if selisih_hari > 0: return round((bobot_akhir - bobot_awal) / selisih_hari, 2)
+    except: pass
     return 0.0
 
 # --- FUNGSI HALAMAN LOGIN ---
@@ -360,6 +270,7 @@ def login_page():
                 else:
                     st.error("Username atau Password salah. Silakan hubungi Admin Kandang.")
 
+# --- ROUTING LOGIC & SESSION INITIALIZATION ---
 if "logged_in" not in st.session_state:
     if "logged_in" in st.query_params and st.query_params["logged_in"] == "true":
         username_ref = st.query_params.get("username", "user")
@@ -376,22 +287,36 @@ if "logged_in" not in st.session_state:
     else:
         st.session_state["logged_in"] = False
 
-# Inisialisasi Data Global
-df_sapi = load_data()
-df_panen = load_panen_data()
-df_truk = load_truk_data()
-LIST_JENIS_SAPI = load_jenis_sapi()
-
+# --- KONDISI BELUM LOGIN ---
 if not st.session_state["logged_in"]:
     login_page()
+
+# --- KONDISI SUDAH LOGIN (PERBAIKAN PERFORMA DI SINI) ---
 else:
+    # 1. Hubungkan ke Google Sheets secara global (Hanya saat sudah masuk aplikasi)
+    sheet = get_google_sheet()
+    
+    # 2. Ambil data dari Sheets / CSV (Hanya dipanggil setelah operator terverifikasi)
+    df_sapi = load_data()
+    df_panen = load_panen_data()
+    df_truk = load_truk_data()
+    LIST_JENIS_SAPI = load_jenis_sapi()
+
+    # --- TAMPILAN HALAMAN UTAMA KANDANG ---
     st.title("🐂 Sistem Monitoring Penggemukan Sapi Impor & Lokal")
+    
+    # Tampilkan banner status koneksi secara elegan setelah login berhasil
+    if sheet:
+        st.success("Aplikasi ini sekarang terhubung online dengan Google Sheets! 🚀")
+    else:
+        st.warning("⚠️ Aplikasi berjalan dalam mode LOKAL (Gagal terhubung ke Google Sheets).")
     st.markdown("---")
 
     user_role = st.session_state["role"]
     user_name = st.session_state["username"]
     daftar_menu_user = st.session_state.get("allowed_menus", [ALL_MENUS[0]])
 
+    # SIDEBAR PANEL CONTROL
     st.sidebar.markdown("### 👤 Pengguna Aktif")
     st.sidebar.info(f"**User:** {user_name.upper()}\n\n**Hak Akses:** {user_role}")
     
@@ -407,39 +332,28 @@ else:
     st.sidebar.markdown("---")
     menu = st.sidebar.selectbox("PILIH MENU APLIKASI", daftar_menu_user)
 
-    # ==================== MENU 1: DASHBOARD ====================
+    # ==================== CONTROLLER MENU ROUTING ====================
     if menu == "📊 Dashboard & Tabel Monitor":
         tampilkan_dashboard(df_sapi)
-    # ==================== MENU 2: MANAJEMEN PEN & MUTASI SAPI ====================
     elif menu == "🏠 Manajemen Pen & Mutasi Sapi":
         tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, calculate_adg, save_data, add_activity_log, user_name)
-    # ==================== MENU 3: MASTER JENIS SAPI ====================
     elif menu == "🐂 Kelola Master Jenis Sapi":
         tampilkan_menu_jenis_sapi(LIST_JENIS_SAPI, save_jenis_sapi, add_activity_log, user_name)
-    # ==================== MENU 4: MANAJEMEN AKUN OPERATOR ====================
     elif menu == "👥 Manajemen Akun Operator":
         tampilkan_menu_operator(load_users, ALL_MENUS, save_users, add_activity_log, user_name)
-    # ==================== MENU 5: TIMBANGAN ARMADA TRUK ====================
     elif menu == "🚛 Timbangan Armada Truk":
         tampilkan_menu_timbangan_truk(df_truk, save_truk_data, add_activity_log, user_name)
-    # ==================== MENU 6: REGISTRASI SAPI BARU ====================
     elif menu == "➕ Registrasi Sapi Baru":
         tampilkan_menu_registrasi(df_sapi, LIST_JENIS_SAPI, save_data, add_activity_log, user_name)
-    # ==================== MENU 7: INPUT PAKAN HARIAN ====================
     elif menu == "🍽️ Input Pakan Harian":
         tampilkan_menu_pakan(df_sapi, save_data, add_activity_log, user_name)
-    # ==================== MENU 8: INPUT TIMBANGAN BERKALA ====================
     elif menu == "⚖️ Input Timbangan Berkala":
         tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log, user_name)
-    # ==================== MENU 9: ANALISIS & GRAFIK PERFORMA ====================
     elif menu == "📈 Analisis & Grafik Performa":
         tampilkan_menu_analisis_grafik(df_sapi, DAFTAR_PEN)
-    # ==================== MENU 10: MANAJEMEN PANEN & PENJUALAN ====================
     elif menu == "💰 Manajemen Panen & Penjualan":
         tampilkan_menu_panen_penjualan(df_sapi, df_panen, save_panen_data, save_data, add_activity_log, user_name)
-    # ==================== MENU 11: EDIT & HAPUS DATA SAPI ====================
     elif menu == "⚙️ Edit & Hapus Data":
         tampilkan_menu_edit_hapus(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, save_data, add_activity_log, user_name)
-    # ==================== MENU 12: LOG AKTIVITAS OPERATOR ====================
     elif menu == "📜 Log Aktivitas Operator":
         tampilkan_menu_log(read_sheet_to_df, write_df_to_sheet)
