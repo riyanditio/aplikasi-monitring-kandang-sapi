@@ -360,7 +360,7 @@ else:
     elif menu == "🚛 Timbangan Armada Truk":
         tampilkan_menu_timbangan_truk(df_truk, save_truk_data, add_activity_log, user_name)
     elif menu == "➕ Registrasi Sapi Baru":
-        tampilkan_menu_registrasi(df_sapi, LIST_JENIS_SAPI, save_data, add_activity_log, user_name)
+        tampilkan_menu_registrasi(df_sapi, LIST_JENIS_SAPI, STRUKTUR_KANDANG, save_data, add_activity_log, user_name)
     elif menu == "🍽️ Input Pakan Harian":
         tampilkan_menu_pakan(df_sapi, save_data, add_activity_log, user_name, read_sheet_to_df, write_df_to_sheet)
     elif menu == "⚖️ Input Timbangan Berkala":
