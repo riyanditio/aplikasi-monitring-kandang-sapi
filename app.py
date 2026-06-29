@@ -18,7 +18,7 @@ from menu.master_jenis_sapi import tampilkan_menu_jenis_sapi
 from menu.manajemen_pen import tampilkan_menu_pen_mutasi
 from menu.dashboard import tampilkan_dashboard
 
-# --- 1. PERBAIKAN: set_page_config HARUS DI PALING ATAS ---
+# --- 1. set_page_config HARUS DI PALING ATAS ---
 st.set_page_config(page_title="Sistem Penggemukan Sapi", layout="wide")
 
 # --- KONEKSI GOOGLE SHEETS MENGGUNAKAN GSPREAD (GLOBAL CACHED) ---
@@ -211,9 +211,10 @@ def load_data():
         
     return df.reindex(columns=cols)
 
+# --- PERBAIKAN DI BARIS INI: Mengarahkan penyimpanan dengan benar ke Sheets/CSV ---
 def save_data(df):
     cols = ["Kode Sapi", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Umur Masuk (Bulan)", "Asal Negara", "Tgl Masuk", "Bobot Awal (kg)", "Tgl Cek Akhir", "Bobot Akhir (kg)", "ADG (kg/hari)", "Total Pakan (kg)", "Tgl Pakan Terakhir", "Lokasi Pen"]
-    save_data(df)
+    write_df_to_sheet("data_sapi", df, cols)
 
 def load_panen_data():
     cols = ["Kode Sapi", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Asal Negara", "Tgl Masuk", "Tgl Panen", "Lama Pelihara (Hari)", "Bobot Awal (kg)", "Bobot Panen (kg)", "Total Gain (kg)", "Total Pakan (kg)", "FCR Akhir", "ADG Akhir (kg/hari)", "Harga Jual /kg (Rp)", "Total Pendapatan (Rp)", "Pembeli/Tujuan"]
@@ -291,7 +292,7 @@ if "logged_in" not in st.session_state:
 if not st.session_state["logged_in"]:
     login_page()
 
-# --- KONDISI SUDAH LOGIN (PERBAIKAN PERFORMA DI SINI) ---
+# --- KONDISI SUDAH LOGIN ---
 else:
     # Ambil data berat dari Sheets / CSV (Hanya dipanggil setelah operator terverifikasi)
     df_sapi = load_data()
