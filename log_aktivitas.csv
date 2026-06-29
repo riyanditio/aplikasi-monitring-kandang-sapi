@@ -6,3 +6,102 @@ Tanggal & Waktu,Operator,Aktivitas,Detail Keterangan
 2026-06-25 08:39:00,admin,Logout,Keluar dari sistem.
 2026-06-25 08:40:59,admin,Login,Berhasil masuk ke dalam sistem.
 2026-06-25 15:41:23,admin,Login,Berhasil masuk ke dalam sistem.
+2026-06-25 09:06:59,admin,Logout,Keluar dari sistem.
+2026-06-25 09:08:18,admin,Login,Berhasil masuk ke dalam sistem.
+2026-06-26 02:51:17,admin,Logout,Keluar dari sistem.
+2026-06-26 02:51:47,operator,Login,Berhasil masuk ke dalam sistem.
+2026-06-26 03:04:24,admin,Registrasi Sapi,Mendaftarkan sapi baru Kode: S1 | RFID: DPR0001 | Bobot: 350.2 kg.
+2026-06-26 03:07:50,admin,Registrasi Sapi,Mendaftarkan sapi baru Kode: S1 | RFID: DPR0002 | Bobot: 350.2 kg.
+2026-06-26 03:08:05,admin,Registrasi Sapi,Mendaftarkan sapi baru Kode: S1 | RFID: DPR0003 | Bobot: 350.2 kg.
+2026-06-26 03:09:03,admin,Registrasi Sapi,Mendaftarkan sapi baru Kode: S1 | RFID: DPR0005 | Bobot: 351.2 kg.
+2026-06-26 03:18:50,operator,Login,Berhasil masuk ke dalam sistem.
+2026-06-26 03:24:27,operator,Timbangan Truk,Pencatatan jembatan timbang No TRK-26032426 | Netto: 1755.0 kg.
+2026-06-26 03:24:31,admin,Registrasi Sapi,Mendaftarkan sapi baru Kode: S.1 | RFID: DPR006 | Bobot: 349.6 kg.
+2026-06-26 03:25:39,admin,Registrasi Sapi,Mendaftarkan sapi baru Kode: S.1 | RFID: DPR007 | Bobot: 353.6 kg.
+2026-06-26 03:36:04,admin,Koreksi Data Cepat,Koreksi cepat Sapi Kode S1 (RFID DPR006).
+2026-06-26 03:41:36,admin,Registrasi Sapi,Mendaftarkan sapi baru Kode: S1 | RFID: DPR0008 | Bobot: 351.5 kg.
+2026-06-26 03:43:21,admin,Registrasi Sapi,Mendaftarkan sapi baru Kode: S1 | RFID: DPR0009 | Bobot: 351.5 kg.
+2026-06-26 03:48:16,admin,Registrasi Sapi,Mendaftarkan sapi baru Kode: S1 | RFID: DPR0004 | Bobot: 348.9 kg.
+2026-06-26 05:40:24,operator,Mutasi Kandang,Memindahkan Sapi Kode S1 (RFID DPR0006) dari Pen Karantina menuju Pen A (Bobot < 350kg).
+2026-06-26 05:41:10,operator,Mutasi Kandang,Memindahkan Sapi Kode S1 (RFID DPR0004) dari Pen Karantina menuju Pen A (Bobot < 350kg).
+2026-06-26 05:43:19,operator,Mutasi Kandang,Memindahkan Sapi Kode S1 (RFID DPR0007) dari Pen Karantina menuju Pen B (Bobot 350-450kg).
+2026-06-26 05:45:31,operator,Mutasi Kandang,Memindahkan Sapi Kode S1 (RFID DPR0008) dari Pen Karantina menuju Pen B (Bobot 350-450kg).
+2026-06-26 05:47:08,operator,Mutasi Kandang,Memindahkan Sapi Kode S1 (RFID DPR0009) dari Pen Karantina menuju Pen B (Bobot 350-450kg).
+2026-06-26 08:56:10,operator,Login,Berhasil masuk ke dalam sistem.
+2026-06-26 08:58:48,operator,Input Pakan,Menambahkan pakan sebanyak 35.0 kg ke Sapi Kode S1 (RFID DPR0005).
+2026-06-26 08:59:07,operator,Input Pakan,Menambahkan pakan sebanyak 35.0 kg ke Sapi Kode S1 (RFID DPR0006).
+2026-06-26 09:00:36,operator,Input Pakan,Menambahkan pakan sebanyak 35.0 kg ke Sapi Kode S1 (RFID DPR0007).
+2026-06-26 09:01:11,operator,Input Pakan,Menambahkan pakan sebanyak 35.0 kg ke Sapi Kode S1 (RFID DPR0008).
+2026-06-26 09:02:37,operator,Input Pakan,Menambahkan pakan sebanyak 35.0 kg ke Sapi Kode S1 (RFID DPR0004).
+2026-06-26 09:04:50,operator,Registrasi Sapi,Mendaftarkan sapi baru Kode: S1 | RFID: DPR0001 | Bobot: 347.8 kg.
+2026-06-26 09:05:18,operator,Registrasi Sapi,Mendaftarkan sapi baru Kode: S1 | RFID: DPR0002 | Bobot: 348.7 kg.
+2026-06-26 09:05:56,operator,Registrasi Sapi,Mendaftarkan sapi baru Kode: S1 | RFID: DPR0003 | Bobot: 357.3 kg.
+2026-06-26 09:06:53,operator,Input Pakan,Menambahkan pakan sebanyak 35.0 kg ke Sapi Kode S1 (RFID DPR0001).
+2026-06-26 09:08:37,operator,Input Pakan,Menambahkan pakan sebanyak 35.0 kg ke Sapi Kode S1 (RFID DPR0003).
+2026-06-26 09:11:08,operator,Timbangan Truk,Pencatatan jembatan timbang No TRK-26091108 | Netto: 1396.0 kg.
+2026-06-26 09:12:43,operator,Logout,Keluar dari sistem.
+2026-06-26 09:14:21,operator,Login,Berhasil masuk ke dalam sistem.
+2026-06-26 09:23:53,admin,Login,Berhasil masuk ke dalam sistem.
+2026-06-26 10:02:20,admin,Logout,Keluar dari sistem.
+2026-06-26 10:54:11,admin,Registrasi Sapi,Mendaftarkan sapi baru Kode: S1 | RFID: DPR0010 | Bobot: 351.5 kg.
+2026-06-26 10:56:23,admin,Mutasi Kandang,Memindahkan Sapi Kode S1 (RFID DPR0001) dari Pen Karantina menuju Pen A (Bobot < 350kg).
+2026-06-26 10:56:47,admin,Mutasi Kandang,Memindahkan Sapi Kode S1 (RFID DPR0002) dari Pen Karantina menuju Pen A (Bobot < 350kg).
+2026-06-26 10:57:10,admin,Mutasi Kandang,Memindahkan Sapi Kode S1 (RFID DPR0003) dari Pen Karantina menuju Pen B (Bobot 350-450kg).
+2026-06-26 10:57:42,admin,Mutasi Kandang,Memindahkan Sapi Kode S1 (RFID DPR0010) dari Pen Karantina menuju Pen B (Bobot 350-450kg).
+2026-06-26 11:01:10,admin,Input Pakan,Menambahkan pakan sebanyak 35.0 kg ke Sapi Kode S1 (RFID DPR0005).
+2026-06-26 11:01:33,admin,Input Pakan,Menambahkan pakan sebanyak 35.0 kg ke Sapi Kode S1 (RFID DPR0006).
+2026-06-26 11:02:16,admin,Input Pakan,Menambahkan pakan sebanyak 35.0 kg ke Sapi Kode S1 (RFID DPR0007).
+2026-06-26 11:02:37,admin,Input Pakan,Menambahkan pakan sebanyak 35.0 kg ke Sapi Kode S1 (RFID DPR0008).
+2026-06-26 11:03:13,admin,Input Pakan,Menambahkan pakan sebanyak 35.0 kg ke Sapi Kode S1 (RFID DPR0009).
+2026-06-26 11:04:10,admin,Input Pakan,Menambahkan pakan sebanyak 35.0 kg ke Sapi Kode S1 (RFID DPR0001).
+2026-06-26 11:04:30,admin,Input Pakan,Menambahkan pakan sebanyak 35.0 kg ke Sapi Kode S1 (RFID DPR0001).
+2026-06-26 11:05:30,admin,Input Pakan,Menambahkan pakan sebanyak 35.0 kg ke Sapi Kode S1 (RFID DPR0003).
+2026-06-26 11:06:08,admin,Input Pakan,Menambahkan pakan sebanyak 35.0 kg ke Sapi Kode S1 (RFID DPR0010).
+2026-06-26 11:07:45,admin,Input Pakan,Menambahkan pakan sebanyak 35.0 kg ke Sapi Kode S1 (RFID DPR0010).
+2026-06-26 13:18:49,admin,Login,Berhasil masuk ke dalam sistem.
+2026-06-26 13:23:49,admin,Logout,Keluar dari sistem.
+2026-06-27 05:56:28,admin,Login,Berhasil masuk ke dalam sistem.
+2026-06-27 05:57:45,admin,Logout,Keluar dari sistem.
+2026-06-27 05:59:50,operator,Input Pakan,Menambahkan pakan sebanyak 35.0 kg ke Sapi Kode S1 (RFID DPR0002).
+2026-06-27 06:14:55,operator,Input Pakan,Menambahkan pakan sebanyak 35.0 kg ke Sapi Kode S1 (RFID DPR0010).
+2026-06-27 06:18:25,operator,Mutasi Kandang,Memindahkan Sapi Kode S1 (RFID DPR0007) dari Pen B (Bobot 350-450kg) menuju Pen D (Khusus/Isolasi Sakit).
+2026-06-27 06:20:30,operator,Mutasi Kandang,Memindahkan Sapi Kode S1 (RFID DPR0003) dari Pen B (Bobot 350-450kg) menuju Pen D (Khusus/Isolasi Sakit).
+2026-06-27 09:09:57,operator,Logout,Keluar dari sistem.
+2026-06-27 09:12:49,admin,Logout,Keluar dari sistem.
+2026-06-27 15:52:29,admin,Login,Berhasil masuk ke dalam sistem.
+2026-06-27 15:55:09,admin,Logout,Keluar dari sistem.
+2026-06-28 14:17:46,admin,Login,Berhasil masuk ke dalam sistem.
+2026-06-28 14:19:09,operator,Login,Berhasil masuk ke dalam sistem.
+2026-06-28 14:19:53,operator,Input Pakan,Menambahkan pakan sebanyak 35.0 kg ke Sapi Kode S1 (RFID DPR0005).
+2026-06-28 14:21:18,operator,Input Pakan,Menambahkan pakan sebanyak 35.0 kg ke Sapi Kode S1 (RFID DPR0007).
+2026-06-28 14:21:50,operator,Input Pakan,Menambahkan pakan sebanyak 35.0 kg ke Sapi Kode S1 (RFID DPR0008).
+2026-06-28 14:22:43,operator,Input Pakan,Menambahkan pakan sebanyak 35.0 kg ke Sapi Kode S1 (RFID DPR0004).
+2026-06-28 14:23:41,operator,Input Pakan,Menambahkan pakan sebanyak 35.0 kg ke Sapi Kode S1 (RFID DPR0002).
+2026-06-28 14:24:39,operator,Input Pakan,Menambahkan pakan sebanyak 35.0 kg ke Sapi Kode S1 (RFID DPR0010).
+2026-06-29 01:11:41,operator,Input Pakan,Menambahkan pakan sebanyak 10.0 kg ke Sapi Kode S1 (RFID DPR0005).
+2026-06-29 01:12:05,operator,Input Pakan,Menambahkan pakan sebanyak 10.0 kg ke Sapi Kode S1 (RFID DPR0006).
+2026-06-29 01:12:20,operator,Input Pakan,Menambahkan pakan sebanyak 10.0 kg ke Sapi Kode S1 (RFID DPR0007).
+2026-06-29 01:13:00,operator,Input Pakan,Menambahkan pakan sebanyak 10.0 kg ke Sapi Kode S1 (RFID DPR0008).
+2026-06-29 01:13:15,operator,Input Pakan,Menambahkan pakan sebanyak 10.0 kg ke Sapi Kode S1 (RFID DPR0009).
+2026-06-29 01:14:11,operator,Input Pakan,Menambahkan pakan sebanyak 10.0 kg ke Sapi Kode S1 (RFID DPR0004).
+2026-06-29 01:15:05,operator,Input Pakan,Menambahkan pakan sebanyak 10.0 kg ke Sapi Kode S1 (RFID DPR0002).
+2026-06-29 01:16:01,operator,Input Pakan,Menambahkan pakan sebanyak 10.0 kg ke Sapi Kode S1 (RFID DPR0010).
+2026-06-29 01:18:22,operator,Timbangan Truk,Pencatatan jembatan timbang No TRK-29011821 | Netto: 348.0 kg.
+2026-06-29 01:20:01,operator,Logout,Keluar dari sistem.
+2026-06-29 02:58:59,admin,Login,Berhasil masuk ke dalam sistem.
+2026-06-29 03:02:43,admin,Logout,Keluar dari sistem.
+2026-06-29 06:52:37,admin,Logout,Keluar dari sistem.
+2026-06-29 07:06:36,operator,Login,Berhasil masuk ke dalam sistem.
+2026-06-29 07:09:17,operator,Input Pakan,Menambahkan pakan sebanyak 10.0 kg ke Sapi Kode S1 (RFID DPR0005).
+2026-06-29 07:09:39,operator,Input Pakan,Menambahkan pakan sebanyak 10.0 kg ke Sapi Kode S1 (RFID DPR0006).
+2026-06-29 07:10:32,operator,Input Pakan,Menambahkan pakan sebanyak 10.0 kg ke Sapi Kode S1 (RFID DPR0007).
+2026-06-29 07:10:59,operator,Input Pakan,Menambahkan pakan sebanyak 10.0 kg ke Sapi Kode S1 (RFID DPR0008).
+2026-06-29 07:11:40,operator,Input Pakan,Menambahkan pakan sebanyak 10.0 kg ke Sapi Kode S1 (RFID DPR0009).
+2026-06-29 07:13:05,operator,Input Pakan,Menambahkan pakan sebanyak 10.0 kg ke Sapi Kode S1 (RFID DPR0001).
+2026-06-29 07:13:38,operator,Input Pakan,Menambahkan pakan sebanyak 10.0 kg ke Sapi Kode S1 (RFID DPR0001).
+2026-06-29 07:13:58,operator,Input Pakan,Menambahkan pakan sebanyak 10.0 kg ke Sapi Kode S1 (RFID DPR0002).
+2026-06-29 07:14:35,operator,Input Pakan,Menambahkan pakan sebanyak 10.0 kg ke Sapi Kode S1 (RFID DPR0003).
+2026-06-29 07:15:06,operator,Input Pakan,Menambahkan pakan sebanyak 10.0 kg ke Sapi Kode S1 (RFID DPR0010).
+2026-06-29 07:19:44,operator,Login,Berhasil masuk ke dalam sistem.
+2026-06-29 14:29:48,admin,Koreksi Data Cepat,Koreksi cepat Sapi Kode S1 (RFID DPR0005).
+2026-06-29 14:30:59,admin,Koreksi Data Cepat,Koreksi cepat Sapi Kode S1 (RFID DPR0005).
