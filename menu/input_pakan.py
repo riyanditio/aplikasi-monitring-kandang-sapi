@@ -1,172 +1,101 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, timedelta, timezone
-import os
+from datetime import datetime
 
-def tampilkan_menu_pakan(df_sapi, save_data, add_activity_log, user_name, read_sheet_to_df=None, write_df_to_sheet=None):
-    st.subheader("🍽️ Input Pakan Harian Sapi")
-    
-    # Konfigurasi zona waktu lokal WIB (UTC+7)
-    zona_wib = timezone(timedelta(hours=7))
-    tgl_hari_ini = datetime.now(zona_wib).strftime("%Y-%m-%d")
-    waktu_sekarang = datetime.now(zona_wib).strftime("%H:%M:%S")
+def tampilkan_menu_pakan(df_sapi, struktur_kandang, save_data, add_activity_log, user_name, read_sheet_to_df, write_df_to_sheet):
+    st.subheader("🍽️ Input Pemberian Pakan Harian per Pen")
+    st.markdown("Pilih lokasi pen untuk mencatat berat pakan. Sistem akan otomatis membagi rata pakan ke seluruh sapi di pen tersebut.")
 
-    # Skema kolom untuk database riwayat pakan
-    cols_riwayat = ["Tanggal", "Waktu", "Metode", "Pen/Lokasi", "Kode Sapi", "RFID/Tag", "Jumlah Pakan (kg)", "Operator"]
+    # --- BLOCK 1: PILIHAN HIRARKI LOKASI KANDANG ---
+    col_a, col_b = st.columns(2)
+    with col_a:
+        pilihan_blok = st.selectbox("1. Pilih Blok Kandang", list(struktur_kandang.keys()))
+    with col_b:
+        daftar_pen_tersedia = struktur_kandang[pilihan_blok]
+        pilihan_pen = st.selectbox("2. Pilih Nomor / Bagian Pen", daftar_pen_tersedia)
 
-    # Ambil data riwayat pakan dari Google Sheets / CSV Lokal
-    if read_sheet_to_df and write_df_to_sheet:
-        df_riwayat = read_sheet_to_df("riwayat_pakan", cols_riwayat)
+    # Gabungkan menjadi format database utama
+    lokasi_pen_final = f"{pilihan_blok} - {pilihan_pen}"
+
+    # --- BLOCK 2: DETEKSI POLRASI SAPI DI PEN ---
+    if not df_sapi.empty:
+        df_sapi_pen = df_sapi[df_sapi["Lokasi Pen"].astype(str).str.strip().str.lower() == lokasi_pen_final.strip().lower()]
+        jumlah_sapi = len(df_sapi_pen)
     else:
-        if os.path.exists("riwayat_pakan.csv"):
-            df_riwayat = pd.read_csv("riwayat_pakan.csv")
-        else:
-            df_riwayat = pd.DataFrame(columns=cols_riwayat)
+        df_sapi_pen = pd.DataFrame()
+        jumlah_sapi = 0
 
-    # Membagi visualisasi menjadi 2 Tab: Input Data & Riwayat Data
-    tab_input, tab_riwayat = st.tabs(["➕ Input Pakan Baru", "📜 Riwayat Pemberian Pakan"])
+    # Tampilkan informasi populasi pen secara informatif
+    st.info(f"📊 **Status Lokasi:** {lokasi_pen_final} saat ini berisi **{jumlah_sapi} ekor** sapi.")
 
-    # ==================== TAB 1: INPUT PAKAN BARU ====================
-    with tab_input:
-        if df_sapi.empty:
-            st.warning("⚠️ Belum ada data sapi aktif di dalam kandang. Jalankan Registrasi Sapi Baru terlebih dahulu.")
-            return
-
-        st.markdown("### 📋 Pilih Metode Distribusi Pakan")
-        metode = st.radio("Metode Penginputan:", ["Individu (Per Ekor Sapi)", "Serentak (Per Pen / Kandang)"], horizontal=True)
-        st.markdown("---")
-
-        # --- OPSI A: INPUT PAKAN PER EKOR INDIVIDU ---
-        if metode == "Individu (Per Ekor Sapi)":
-            st.markdown("#### 🐂 Input Pakan Per Ekor Sapi")
-            
-            # Gabungkan informasi kode, rfid, dan pen saat ini agar operator tidak tertukar
-            opsi_sapi = df_sapi.apply(lambda r: f"{r['Kode Sapi']} - {r['RFID/Tag']} ({r['Lokasi Pen']})", axis=1).tolist()
-            pilihan_sapi = st.selectbox("Pilih Sapi Sasaran:", opsi_sapi)
-            
-            idx_terpilih = opsi_sapi.index(pilihan_sapi)
-            sapi_row = df_sapi.iloc[idx_terpilih]
-            
-            jumlah_pakan = st.number_input("Jumlah Volume Pakan (kg):", min_value=0.1, max_value=100.0, value=10.0, step=0.5)
-            
-            if st.button("Simpan Pakan Individu", type="primary", use_container_width=True):
-                # Validasi nilai pakan lama jika kosong
-                pakan_lama = sapi_row["Total Pakan (kg)"]
-                pakan_lama_float = float(pakan_lama) if pd.notna(pakan_lama) and str(pakan_lama).strip() != "" else 0.0
-                
-                # Update data utama sapi
-                df_sapi.at[idx_terpilih, "Total Pakan (kg)"] = pakan_lama_float + jumlah_pakan
-                df_sapi.at[idx_terpilih, "Tgl Pakan Terakhir"] = tgl_hari_ini
-                save_data(df_sapi)
-                
-                # Masukkan entri baru ke dataframe riwayat pakan
-                new_entry = {
-                    "Tanggal": tgl_hari_ini,
-                    "Waktu": waktu_sekarang,
-                    "Metode": "Individu",
-                    "Pen/Lokasi": sapi_row["Lokasi Pen"],
-                    "Kode Sapi": sapi_row["Kode Sapi"],
-                    "RFID/Tag": sapi_row["RFID/Tag"],
-                    "Jumlah Pakan (kg)": jumlah_pakan,
-                    "Operator": user_name
-                }
-                df_riwayat = pd.concat([df_riwayat, pd.DataFrame([new_entry])], ignore_index=True)
-                
-                if write_df_to_sheet:
-                    write_df_to_sheet("riwayat_pakan", df_riwayat, cols_riwayat)
-                else:
-                    df_riwayat.to_csv("riwayat_pakan.csv", index=False)
-                    
-                add_activity_log(user_name, "Input Pakan Individu", f"Menginput pakan {jumlah_pakan} kg untuk Sapi {sapi_row['Kode Sapi']}")
-                st.success(f"✅ Berhasil mencatat pakan {jumlah_pakan} kg untuk Sapi {sapi_row['Kode Sapi']}!")
-                st.rerun()
-
-        # --- OPSI B: INPUT PAKAN SERENTAK PER PEN (PERMINTAAN ANDA) ---
-        else:
-            st.markdown("#### 🏠 Input Pakan Serentak Berdasarkan Pen / Blok")
-            daftar_pen = ["Pen Karantina", "Pen A (Bobot < 350kg)", "Pen B (Bobot 350-450kg)", "Pen C (Bobot > 450kg)", "Pen D (Khusus/Isolasi Sakit)"]
-            selected_pen = st.selectbox("Pilih Target Pen Kandang:", daftar_pen)
-            
-            # Filter populasi sapi yang benar-benar ada di dalam pen tersebut saat ini
-            sapi_di_pen = df_sapi[df_sapi["Lokasi Pen"] == selected_pen]
-            jumlah_sapi = len(sapi_di_pen)
-            
-            if jumlah_sapi == 0:
-                st.warning(f"ℹ️ Tidak ditemukan adanya sapi aktif di dalam {selected_pen} saat ini.")
-            else:
-                st.info(f"📊 Deteksi Sistem: Ada **{jumlah_sapi} ekor** sapi aktif di dalam **{selected_pen}**.")
-            
-            jumlah_pakan_per_ekor = st.number_input("Jumlah Pakan RATA-RATA per Ekor (kg):", min_value=0.1, max_value=100.0, value=15.0, step=0.5)
-            total_pakan_pen = jumlah_pakan_per_ekor * jumlah_sapi
-            
-            st.metric("Estimasi Total Berkas Keluar Pakan Pen", f"{total_pakan_pen:,.1f} kg", help="Hasil kali antara jumlah sapi di pen dengan pakan per ekor.")
-            
-            if st.button("🚀 Eksekusi Pemberian Pakan Serentak", type="primary", use_container_width=True):
-                if jumlah_sapi == 0:
-                    st.error("❌ Gagal menyimpan! Pengisian ditolak karena tidak ada sapi di pen ini.")
-                else:
-                    new_entries = []
-                    
-                    # Looping massal untuk memperbarui seluruh sapi di dalam pen terpilih
-                    for idx, row in sapi_di_pen.iterrows():
-                        pakan_lama = df_sapi.at[idx, "Total Pakan (kg)"]
-                        pakan_lama_float = float(pakan_lama) if pd.notna(pakan_lama) and str(pakan_lama).strip() != "" else 0.0
-                        
-                        # Tambahkan pakan ke masing-masing sapi
-                        df_sapi.at[idx, "Total Pakan (kg)"] = pakan_lama_float + jumlah_pakan_per_ekor
-                        df_sapi.at[idx, "Tgl Pakan Terakhir"] = tgl_hari_ini
-                        
-                        # Buat catatan riwayat log terpisah per ekor demi audit data timbangan berkala nanti
-                        new_entries.append({
-                            "Tanggal": tgl_hari_ini,
-                            "Waktu": waktu_sekarang,
-                            "Metode": "Serentak Pen",
-                            "Pen/Lokasi": selected_pen,
-                            "Kode Sapi": row["Kode Sapi"],
-                            "RFID/Tag": row["RFID/Tag"],
-                            "Jumlah Pakan (kg)": jumlah_pakan_per_ekor,
-                            "Operator": user_name
-                        })
-                    
-                    # Simpan data master utama sapi
-                    save_data(df_sapi)
-                    
-                    # Gabungkan riwayat pakan baru ke database utama log pakan
-                    df_riwayat = pd.concat([df_riwayat, pd.DataFrame(new_entries)], ignore_index=True)
-                    if write_df_to_sheet:
-                        write_df_to_sheet("riwayat_pakan", df_riwayat, cols_riwayat)
-                    else:
-                        df_riwayat.to_csv("riwayat_pakan.csv", index=False)
-                        
-                    # Catat transaksi ke log aktivitas sistem utama
-                    add_activity_log(user_name, "Input Pakan Serentak", f"Menginput pakan serentak {jumlah_pakan_per_ekor} kg/ekor untuk {jumlah_sapi} ekor di {selected_pen}")
-                    st.success(f"🔥 Sukses! Seluruh sapi ({jumlah_sapi} ekor) di {selected_pen} otomatis terisi masing-masing {jumlah_pakan_per_ekor} kg!")
-                    st.rerun()
-
-    # ==================== TAB 2: RIWAYAT PEMBERIAN PAKAN ====================
-    with tab_riwayat:
-        st.markdown("### 📜 Log Riwayat Pemberian Pakan Harian")
+    # --- BLOCK 3: FORM INPUT PAKAN ---
+    st.markdown("---")
+    with st.form("form_input_pakan", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            jenis_pakan = st.selectbox("Jenis Pakan", ["Konsentrat", "Hijauan / Silase", "Pakan Campuran (TMR)", "Suplemen / Vitamin"])
+            tgl_pakan = st.date_input("Tanggal Pemberian Pakan", datetime.now().date())
         
-        if df_riwayat.empty:
-            st.info("ℹ️ Belum ada riwayat aktivitas pemberian pakan yang terekam.")
-        else:
-            # Sediakan filter dinamis untuk memudahkan peninjauan mandor kandang
-            col_f1, col_f2 = st.columns(2)
-            with col_f1:
-                filter_pen = st.selectbox("Saring Lokasi Pen:", ["Semua"] + list(df_riwayat["Pen/Lokasi"].unique()))
-            with col_f2:
-                filter_metode = st.selectbox("Saring Jenis Input:", ["Semua", "Individu", "Serentak Pen"])
+        with col2:
+            total_pakan_kg = st.number_input("Total Berat Pakan Dikucurkan (kg)", min_value=0.0, max_value=5000.0, value=50.0, step=5.0, help="Input total berat pakan yang diberikan untuk SATU PEN ini.")
             
-            df_filtered = df_riwayat.copy()
-            if filter_pen != "Semua":
-                df_filtered = df_filtered[df_filtered["Pen/Lokasi"] == filter_pen]
-            if filter_metode != "Semua":
-                df_filtered = df_filtered[df_filtered["Metode"] == filter_metode]
+            # Hitung estimasi jatah per ekor secara real-time di UI
+            jatah_per_ekor = round(total_pakan_kg / jumlah_sapi, 2) if jumlah_sapi > 0 else 0.0
+            st.write(f"⚖️ *Estimasi Konsumsi: ~{jatah_per_ekor} kg / ekor*")
+
+        submit_pakan = st.form_submit_button("Simpan & Distribusikan Pakan", type="primary", use_container_width=True)
+
+        if submit_pakan:
+            if total_pakan_kg <= 0:
+                st.error("❌ Gagal Simpan! Total berat pakan harus lebih dari 0 kg.")
+                return
+
+            if jumlah_sapi == 0:
+                st.warning("⚠️ Perhatian: Tidak ada sapi aktif di pen ini. Data pakan hanya akan dicatat di Log Histori Pakan saja.")
             
-            # Balik data agar entri pakan terbaru selalu berada di paling atas tabel
-            df_display = df_filtered.sort_values(by=["Tanggal", "Waktu"], ascending=False).reset_index(drop=True)
-            st.dataframe(df_display, use_container_width=True)
+            # 1. Update data akumulasi pakan di database utama (jika ada sapinya)
+            if jumlah_sapi > 0:
+                # Cari indeks baris sapi-sapi yang berada di pen tersebut
+                indeks_sapi_pen = df_sapi[df_sapi["Lokasi Pen"].astype(str).str.strip().str.lower() == lokasi_pen_final.strip().lower()].index
+                
+                # Tambahkan jatah pakan per ekor ke kolom 'Total Pakan (kg)' dan update tanggalnya
+                df_sapi.loc[indeks_sapi_pen, "Total Pakan (kg)"] = df_sapi.loc[indeks_sapi_pen, "Total Pakan (kg)"].astype(float) + jatah_per_ekor
+                df_sapi.loc[indeks_sapi_pen, "Tgl Pakan Terakhir"] = tgl_pakan.strftime("%Y-%m-%d")
+                
+                # Simpan dataframe utama yang diperbarui
+                save_data(df_sapi)
+
+            # 2. Catat histori pengucuran pakan ke Google Sheets tab 'log_pakan'
+            cols_log_pakan = ["Tanggal", "Lokasi Pen", "Jumlah Sapi (Ekor)", "Jenis Pakan", "Total Pakan (kg)", "Rata-rata/Ekor (kg)", "Operator"]
+            df_histori_pakan = read_sheet_to_df("log_pakan", cols_log_pakan)
             
-            # Kalkulasi total muatan pakan yang keluar berdasarkan hasil filter
-            total_pakan_terdistribusi = df_display["Jumlah Pakan (kg)"].astype(float).sum()
-            st.metric("Total Pakan Terpakai di Lapangan (Sesuai Filter)", f"{total_pakan_terdistribusi:,.1f} kg")
+            new_log_pakan = {
+                "Tanggal": tgl_pakan.strftime("%Y-%m-%d"),
+                "Lokasi Pen": lokasi_pen_final,
+                "Jumlah Sapi (Ekor)": int(jumlah_sapi),
+                "Jenis Pakan": jenis_pakan,
+                "Total Pakan (kg)": float(total_pakan_kg),
+                "Rata-rata/Ekor (kg)": float(jatah_per_ekor),
+                "Operator": user_name
+            }
+            
+            df_histori_pakan = pd.concat([df_histori_pakan, pd.DataFrame([new_log_pakan])], ignore_index=True)
+            write_df_to_sheet("log_pakan", df_histori_pakan, cols_log_pakan)
+
+            # 3. Catat ke log aktivitas audit operator global
+            add_activity_log(user_name, "Input Pakan", f"Mengisi {jenis_pakan} sebanyak {total_pakan_kg}kg di {lokasi_pen_final}")
+            
+            st.success(f"🎉 Berhasil! Pakan {jenis_pakan} sebesar {total_pakan_kg} kg telah dicatat untuk {lokasi_pen_final}.")
+            st.balloons()
+
+    # --- BLOCK 4: TABEL RIWAYAT HISTORI PANDANGAN ---
+    st.markdown("### 📜 Riwayat Pengucuran Pakan Terakhir")
+    cols_log_pakan = ["Tanggal", "Lokasi Pen", "Jumlah Sapi (Ekor)", "Jenis Pakan", "Total Pakan (kg)", "Rata-rata/Ekor (kg)", "Operator"]
+    df_view_pakan = read_sheet_to_df("log_pakan", cols_log_pakan)
+    
+    if not df_view_pakan.empty:
+        # Urutkan dari tanggal terbaru di atas
+        df_view_pakan = df_view_pakan.sort_values(by="Tanggal", ascending=False).head(10)
+        st.dataframe(df_view_pakan, use_container_width=True, hide_index=True)
+    else:
+        st.info("Belum ada riwayat pemberian pakan yang tercatat.")
