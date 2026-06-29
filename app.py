@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import os
 import gspread
 from google.oauth2.service_account import Credentials
@@ -109,8 +109,13 @@ ALL_MENUS = ["📊 Dashboard & Tabel Monitor", "🏠 Manajemen Pen & Mutasi Sapi
 # --- FUNGSI MENCATAT LOG RIWAYAT AKTIVITAS ---
 def add_activity_log(operator, aktivitas, detail):
     cols = ["Tanggal & Waktu", "Operator", "Aktivitas", "Detail Keterangan"]
+    
+    # Mengunci waktu agar selalu menggunakan Waktu Indonesia Barat (WIB = UTC+7)
+    zona_wib = timezone(timedelta(hours=7))
+    waktu_wib = datetime.now(zona_wib).strftime("%Y-%m-%d %H:%M:%S")
+    
     new_log = {
-        "Tanggal & Waktu": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "Tanggal & Waktu": waktu_wib,
         "Operator": operator,
         "Aktivitas": aktivitas,
         "Detail Keterangan": detail
@@ -118,7 +123,7 @@ def add_activity_log(operator, aktivitas, detail):
     df = read_sheet_to_df("log_aktivitas", cols)
     df = pd.concat([df, pd.DataFrame([new_log])], ignore_index=True)
     write_df_to_sheet("log_aktivitas", df, cols)
-
+    
 # --- FUNGSI UTAMA UNTUK MANAJEMEN AKUN ---
 def load_users():
     cols = ["Username", "Password", "Role", "Menus"]
