@@ -1,35 +1,38 @@
 import streamlit as st
 import pandas as pd
 
-def tampilkan_menu_analisis_grafik(df_sapi, DAFTAR_PEN):
-    st.subheader("📈 Analisis Tren Visual Kelompok Sapi")
-    if df_sapi.empty: 
-        st.warning("Belum ada data populasi sapi aktif.")
-    else:
-        df_analisis = df_sapi.copy()
-        df_analisis["Lama Peliharaan (Hari)"] = (pd.to_datetime(df_analisis["Tgl Cek Akhir"]) - pd.to_datetime(df_analisis["Tgl Masuk"])).dt.days
-        df_analisis["Total Gain (kg)"] = df_analisis["Bobot Akhir (kg)"] - df_analisis["Bobot Awal (kg)"]
-        df_analisis["FCR"] = df_analisis.apply(lambda row: round(row["Total Pakan (kg)"] / row["Total Gain (kg)"], 2) if row["Total Gain (kg)"] > 0 else 0.0, axis=1)
+def tampilkan_menu_analisis_grafik(df_sapi, daftar_pen):
+    st.subheader("📈 Analisis & Grafik Performa Pertumbuhan Sapi (ADG)")
+    
+    if df_sapi.empty:
+        st.info("ℹ️ Belum ada data performa pertumbuhan yang bisa dianalisis.")
+        return
+
+    # Ekstrak data Blok Kandang secara real-time dari kolom Lokasi Pen
+    df_sapi['Blok Kandang'] = df_sapi['Lokasi Pen'].apply(lambda x: str(x).split(' - ')[0] if ' - ' in str(x) else 'Format Lama / Luar Blok')
+
+    dimensi = st.radio("Pilih Dimensi Analisis Visual:", ["📊 Ringkasan per Blok Kandang (Makro)", "🏪 Detail Per Pen Kandang (Mikro)"], horizontal=True)
+
+    if "Blok Kandang" in dimensi:
+        st.markdown("### 🏬 Rata-rata ADG (kg/hari) Berdasarkan Blok Kandang")
+        df_blok = df_sapi.groupby('Blok Kandang').agg(
+            Populasi=('Kode Sapi', 'count'),
+            Rata_Bobot_Akhir=('Bobot Akhir (kg)', 'mean'),
+            Rata_ADG=('ADG (kg/hari)', 'mean')
+        ).reset_index()
+
+        st.bar_chart(data=df_blok, x='Blok Kandang', y='Rata_ADG', use_container_width=True)
         
-        st.markdown("### 📊 Distribusi Populasi Stok Sapi Saat Ini")
-        col_pop1, col_pop2 = st.columns(2)
-        with col_pop1:
-            st.markdown("#### 🏠 Jumlah Sapi per Pen / Kandang (Ekor)")
-            df_pop_pen = df_analisis.groupby("Lokasi Pen").size().reset_index(name="Jumlah (Ekor)")
-            df_pop_pen = pd.DataFrame({"Locations Pen": DAFTAR_PEN}).merge(df_pop_pen, left_on="Locations Pen", right_on="Lokasi Pen", how="left").fillna(0)
-            st.bar_chart(data=df_pop_pen, x="Locations Pen", y="Jumlah (Ekor)", use_container_width=True)
-        with col_pop2:
-            st.markdown("#### 🐂 Jumlah Sapi berdasarkan Varietas (Ekor)")
-            st.bar_chart(data=df_analisis.groupby("Jenis Sapi").size().reset_index(name="Jumlah (Ekor)"), x="Jenis Sapi", y="Jumlah (Ekor)", use_container_width=True)
-            
-        st.markdown("---")
-        st.markdown("### 📈 Grafik Analisis Performa Pertumbuhan")
-        col_g1, col_g2 = st.columns(2)
-        with col_g1:
-            st.bar_chart(data=df_analisis.groupby("Jenis Sapi")["ADG (kg/hari)"].mean().reset_index(), x="Jenis Sapi", y="ADG (kg/hari)", use_container_width=True)
-        with col_g2:
-            df_fcr_aktif = df_analisis[df_analisis["FCR"] > 0]
-            if not df_fcr_aktif.empty: 
-                st.bar_chart(data=df_fcr_aktif.groupby("Jenis Sapi")["FCR"].mean().reset_index(), x="Jenis Sapi", y="FCR", use_container_width=True)
-            else: 
-                st.info("Grafik FCR menunggu data timbangan.")
+        # Sajikan tabel detail di bawah grafik
+        df_blok.columns = ["Nama Blok Kandang", "Populasi (Ekor)", "Rata Bobot Akhir (kg)", "Rata ADG (kg/hari)"]
+        st.dataframe(df_blok.style.format({"Rata Bobot Akhir (kg)": "{:.2f}", "Rata ADG (kg/hari)": "{:.2f}"}), use_container_width=True, hide_index=True)
+
+    else:
+        st.markdown("### 🎯 Perbandingan Rata-rata ADG Antar Pen Aktif")
+        df_pen = df_sapi.groupby('Lokasi Pen').agg(
+            Populasi=('Kode Sapi', 'count'),
+            Rata_ADG=('ADG (kg/hari)', 'mean')
+        ).reset_index()
+
+        st.bar_chart(data=df_pen, x='Lokasi Pen', y='Rata_ADG', use_container_width=True)
+        st.dataframe(df_pen.rename(columns={"Lokasi Pen": "Lokasi Blok & Pen", "Populasi": "Jumlah Sapi (Ekor)", "Rata_ADG": "Rata ADG (kg/hari)"}), use_container_width=True, hide_index=True)
