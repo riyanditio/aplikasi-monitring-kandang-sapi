@@ -42,67 +42,70 @@ sheet = get_google_sheet()
 # --- FUNGSI PEMBANTU BACA & TULIS SPREADSHEET TABS ---
 def read_sheet_to_df(worksheet_name, default_cols):
     global sheet
-    if not sheet:
-        file_name = f"{worksheet_name}.csv"
-        if os.path.exists(file_name): return pd.read_csv(file_name)
-        return pd.DataFrame(columns=default_cols)
-        
-    for percobaan in range(3):
-        try:
-            worksheet_list = sheet.worksheets()
-            existing_titles = {w.title.strip().lower(): w.title for w in worksheet_list}
-            target_title = worksheet_name.strip().lower()
+    # INTEGRASI FITUR: Animasi Spinner Utama Saat Membaca Data Cloud/Lokal
+    with st.spinner(f"⏳ Membuka database, sedang memuat data {worksheet_name.replace('_', ' ')}..."):
+        if not sheet:
+            file_name = f"{worksheet_name}.csv"
+            if os.path.exists(file_name): return pd.read_csv(file_name)
+            return pd.DataFrame(columns=default_cols)
             
-            if target_title in existing_titles:
-                worksheet = sheet.worksheet(existing_titles[target_title])
-            else:
-                worksheet = sheet.add_worksheet(title=worksheet_name, rows="1000", cols="20")
-                worksheet.append_row(default_cols)
-                return pd.DataFrame(columns=default_cols)
+        for percobaan in range(3):
+            try:
+                worksheet_list = sheet.worksheets()
+                existing_titles = {w.title.strip().lower(): w.title for w in worksheet_list}
+                target_title = worksheet_name.strip().lower()
                 
-            data = worksheet.get_all_records()
-            if not data: return pd.DataFrame(columns=default_cols)
-            return pd.DataFrame(data)
-            
-        except Exception as e:
-            if percobaan < 2:
-                time.sleep(1)
-                continue
-            else:
-                st.warning(f"⚠️ Koneksi Google Sheets sibuk sesaat. Menggunakan data cadangan lokal.")
-                file_name = f"{worksheet_name}.csv"
-                if os.path.exists(file_name): return pd.read_csv(file_name)
-                return pd.DataFrame(columns=default_cols)
+                if target_title in existing_titles:
+                    worksheet = sheet.worksheet(existing_titles[target_title])
+                else:
+                    worksheet = sheet.add_worksheet(title=worksheet_name, rows="1000", cols="20")
+                    worksheet.append_row(default_cols)
+                    return pd.DataFrame(columns=default_cols)
+                    
+                data = worksheet.get_all_records()
+                if not data: return pd.DataFrame(columns=default_cols)
+                return pd.DataFrame(data)
+                
+            except Exception as e:
+                if percobaan < 2:
+                    time.sleep(1)
+                    continue
+                else:
+                    st.warning(f"⚠️ Koneksi Google Sheets sibuk sesaat. Menggunakan data cadangan lokal.")
+                    file_name = f"{worksheet_name}.csv"
+                    if os.path.exists(file_name): return pd.read_csv(file_name)
+                    return pd.DataFrame(columns=default_cols)
 
 def write_df_to_sheet(worksheet_name, df, default_cols):
     global sheet
-    df = df.reindex(columns=default_cols).fillna("")
-    df.to_csv(f"{worksheet_name}.csv", index=False)
-    if not sheet: return
-    
-    for percobaan in range(3):
-        try:
-            worksheet_list = sheet.worksheets()
-            existing_titles = {w.title.strip().lower(): w.title for w in worksheet_list}
-            target_title = worksheet_name.strip().lower()
-            
-            if target_title in existing_titles:
-                worksheet = sheet.worksheet(existing_titles[target_title])
-            else:
-                worksheet = sheet.add_worksheet(title=worksheet_name, rows="1000", cols="20")
+    # INTEGRASI FITUR: Animasi Spinner Utama Saat Menyimpan Data ke Cloud/Lokal
+    with st.spinner(f"💾 Sedang mengunggah dan mengamankan data {worksheet_name.replace('_', ' ')} ke database..."):
+        df = df.reindex(columns=default_cols).fillna("")
+        df.to_csv(f"{worksheet_name}.csv", index=False)
+        if not sheet: return
+        
+        for percobaan in range(3):
+            try:
+                worksheet_list = sheet.worksheets()
+                existing_titles = {w.title.strip().lower(): w.title for w in worksheet_list}
+                target_title = worksheet_name.strip().lower()
                 
-            worksheet.clear()
-            worksheet.update(range_name='A1', values=[df.columns.values.tolist()] + df.values.tolist())
-            break
-        except Exception as e:
-            if percobaan < 2:
-                time.sleep(1.5)
-                continue
-            else:
-                st.error(f"❌ Gagal sinkronisasi data ke Google Sheets ({worksheet_name}). Data tetap aman tersimpan di komputer kandang.")
+                if target_title in existing_titles:
+                    worksheet = sheet.worksheet(existing_titles[target_title])
+                else:
+                    worksheet = sheet.add_worksheet(title=worksheet_name, rows="1000", cols="20")
+                    
+                worksheet.clear()
+                worksheet.update(range_name='A1', values=[df.columns.values.tolist()] + df.values.tolist())
+                break
+            except Exception as e:
+                if percobaan < 2:
+                    time.sleep(1.5)
+                    continue
+                else:
+                    st.error(f"❌ Gagal sinkronisasi data ke Google Sheets ({worksheet_name}). Data tetap aman tersimpan di komputer kandang.")
 
 # ==================== MASTER DATA KONFIGURASI APLIKASI ====================
-# Penyesuaian Struktur Hirarki: 1 Area Kandang -> Beberapa Blok Kandang -> Beberapa Pen
 STRUKTUR_KANDANG = {
     "Blok Karantina": ["Pen Karantina 1", "Pen Karantina 2", "Pen Karantina 3"],
     "Blok Penggemukan A (Bobot < 350kg)": ["Pen A1", "Pen A2", "Pen A3"],
@@ -111,7 +114,6 @@ STRUKTUR_KANDANG = {
     "Blok Isolasi & Perawatan (Sakit)": ["Pen Isolasi 1", "Pen Isolasi 2"]
 }
 
-# Auto-generate DAFTAR_PEN gabungan untuk menyuplai menu registrasi, pakan, grafik, & edit data
 DAFTAR_PEN = []
 for blok, daftar_pen_di_blok in STRUKTUR_KANDANG.items():
     for pen in daftar_pen_di_blok:
@@ -123,8 +125,6 @@ ALL_MENUS = ["📊 Dashboard & Tabel Monitor", "🏠 Manajemen Pen & Mutasi Sapi
 # --- FUNGSI MENCATAT LOG RIWAYAT AKTIVITAS ---
 def add_activity_log(operator, aktivitas, detail):
     cols = ["Tanggal & Waktu", "Operator", "Aktivitas", "Detail Keterangan"]
-    
-    # Mengunci waktu agar selalu menggunakan Waktu Indonesia Barat (WIB = UTC+7)
     zona_wib = timezone(timedelta(hours=7))
     waktu_wib = datetime.now(zona_wib).strftime("%Y-%m-%d %H:%M:%S")
     
@@ -312,7 +312,6 @@ if not st.session_state["logged_in"]:
 
 # --- KONDISI SUDAH LOGIN ---
 else:
-    # Ambil data berat dari Sheets / CSV (Hanya dipanggil setelah operator terverifikasi)
     df_sapi = load_data()
     df_panen = load_panen_data()
     df_truk = load_truk_data()
@@ -321,7 +320,6 @@ else:
     # --- TAMPILAN HALAMAN UTAMA KANDANG ---
     st.title("🐂 Sistem Monitoring Penggemukan Sapi Impor & Lokal")
     
-    # Tampilkan banner status koneksi secara elegan setelah login berhasil
     if sheet:
         st.success("Aplikasi ini sekarang terhubung online dengan Google Sheets! 🚀")
     else:
