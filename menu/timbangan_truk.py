@@ -13,7 +13,7 @@ def tampilkan_menu_timbangan_truk(df_truk, save_truk_data, add_activity_log, use
             no_transaksi = st.text_input("No Transaksi (Otomatis jika kosong)", placeholder="Contoh: TRK-2026-001").strip()
             tgl_timbang = st.date_input("Tanggal Penimbangan", datetime.now().date())
             
-            # [Poin 3] Menambahkan Nama Lokasi Penimbangan
+            # Pilihan Lokasi Penimbangan Komprehensif
             lokasi_timbang = st.selectbox("Nama Lokasi Penimbangan", [
                 "Jembatan Timbang Utama (Kandang)", 
                 "Timbangan Digital Area Karantina",
@@ -23,12 +23,16 @@ def tampilkan_menu_timbangan_truk(df_truk, save_truk_data, add_activity_log, use
             
             no_plat = st.text_input("No Plat / Armada Truk", placeholder="Contoh: B 9123 FDA").strip()
             
-            # [Poin 1] Menambahkan opsi spesifik pada status muatan
+            # --- INTEGRASI TOTAL OPSI STATUS MUATAN (LAMA + BARU) ---
             opsi_muatan = [
-                "sapi kedatangan (pelabuhan dalam negeri)",
-                "sapi keberangkatan (pelabuhan negara asal)",
-                "Pakan Ternak / Konsentrat / Hijauan",
-                "Logistik Umum / Muatan Lain"
+                "Sapi Masuk (Bongkar/Unloading dari Luar)",          # Pilihan Lama
+                "Sapi Keluar (Muat/Loading Penjualan)",            # Pilihan Lama
+                "sapi kedatangan (pelabuhan dalam negeri)",         # Pilihan Baru Pelabuhan
+                "sapi keberangkatan (pelabuhan negara asal)",       # Pilihan Baru Pelabuhan
+                "Mutasi Antar Blok (Internal)",                     # Pilihan Lama
+                "Pakan Ternak / Konsentrat / Hijauan",              # Logistik
+                "Logistik Umum / Muatan Lain",                      # Logistik
+                "Lain-lain"                                         # Pilihan Lama
             ]
             keterangan_muatan = st.selectbox("Keterangan Status Muatan", opsi_muatan)
 
@@ -37,7 +41,7 @@ def tampilkan_menu_timbangan_truk(df_truk, save_truk_data, add_activity_log, use
             tara = st.number_input("Tara / Berat Kosong Truk (kg)", min_value=0.0, value=0.0, step=10.0)
             jumlah_sapi = st.number_input("Jumlah Sapi didalam Truk (Ekor)", min_value=0, value=0, step=1)
             
-            # [Poin 2] Menambahkan daftar RFID/EarTag tepat setelah input jumlah sapi
+            # Daftar RFID/EarTag Manifest
             rfid_list = st.text_area(
                 "Daftar RFID / EarTAG didalam Truk", 
                 placeholder="Scan atau ketik nomor RFID/EarTag di sini.\nGunakan tombol Enter untuk memisahkan setiap ID sapi.",
@@ -90,7 +94,7 @@ def tampilkan_menu_timbangan_truk(df_truk, save_truk_data, add_activity_log, use
             save_truk_data(df_baru)
 
             # Catat log audit aktivitas
-            add_activity_log(user_name, "Timbangan Truk", f"Mencatat muatan {no_plat} ({keterangan_muatan}) di {lokasi_timbang}")
+            add_activity_log(user_name, "Timbangan Truk", f"Mencatat {keterangan_muatan} armada {no_plat} di {lokasi_timbang}")
             
             st.success(f"🎉 Berhasil menyimpan data manifest timbangan armada {no_plat}! Bersih muatan: {netto} kg.")
             st.balloons()
