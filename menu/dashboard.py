@@ -2,7 +2,8 @@ import streamlit as st
 import pandas as pd
 
 def tampilkan_dashboard(df_sapi):
-    st.subheader("📊 Dashboard Utama & Pemantauan Populasi Kontinu")
+    # --- PERUBAHAN JUDUL: Mengganti Kontinu menjadi Berkala ---
+    st.subheader("📊 Dashboard Utama & Pemantauan Populasi Berkala")
 
     if df_sapi.empty:
         st.info("👋 Selamat Datang! Database kosong. Sapi baru belum ada yang terregistrasi masuk kandang.")
@@ -12,14 +13,12 @@ def tampilkan_dashboard(df_sapi):
     TARGET_ADG = 1.6
 
     # Pisahkan data: Sapi Baru vs Sapi yang Sudah Pernah Ditimbang Berkala
-    # Sapi baru memiliki Tgl Cek Akhir yang SAMA dengan Tgl Masuk
     df_sudah_timbang_berkala = df_sapi[df_sapi["Tgl Cek Akhir"].astype(str) != df_sapi["Tgl Masuk"].astype(str)].copy()
 
     # Hitung KPI Utama Global
     total_ekor = len(df_sapi)
     rata_bobot = df_sapi["Bobot Akhir (kg)"].mean()
     
-    # Rata-rata ADG kandang hanya dihitung dari sapi yang sudah aktif ditimbang berkala agar akurat
     if not df_sudah_timbang_berkala.empty:
         rata_adg = df_sudah_timbang_berkala["ADG (kg/hari)"].mean()
         status_adg = f"{rata_adg - TARGET_ADG:+.2f} dari target"
