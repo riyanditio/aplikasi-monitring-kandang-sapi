@@ -10,26 +10,28 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
         st.warning("⚠️ Belum ada data sapi aktif yang tersedia untuk ditimbang.")
         return
 
+    TARGET_ADG = 1.6
+
     # Rekonstruksi otomatis filter berdasarkan data pen unik yang eksis di database
     list_lokasi_eksis = df_sapi["Lokasi Pen"].unique()
-    struktur_filter = {}
+    grid_filter = {}
     for item in list_lokasi_eksis:
         if " - " in str(item):
             b, p = str(item).split(" - ", 1)
-            if b not in struktur_filter:
-                struktur_filter[b] = []
-            struktur_filter[b].append(p)
+            if b not in grid_filter:
+                grid_filter[b] = []
+            grid_filter[b].append(p)
         else:
-            if "Format Lama" not in struktur_filter:
-                struktur_filter["Format Lama"] = []
-            struktur_filter["Format Lama"].append(str(item))
+            if "Format Lama" not in grid_filter:
+                grid_filter["Format Lama"] = []
+            grid_filter["Format Lama"].append(str(item))
 
     st.markdown("#### 🔍 Saring Sapi Berdasarkan Lokasi")
     cf1, cf2 = st.columns(2)
     with cf1:
-        filter_blok = st.selectbox("Pilih Blok Kandang Sapi:", list(struktur_filter.keys()))
+        filter_blok = st.selectbox("Pilih Blok Kandang Sapi:", list(grid_filter.keys()))
     with cf2:
-        filter_pen = st.selectbox("Pilih Nomor/Bagian Pen Sapi:", list(set(struktur_filter[filter_blok])))
+        filter_pen = st.selectbox("Pilih Nomor/Bagian Pen Sapi:", list(set(grid_filter[filter_blok])))
 
     # Gabung kembali string filter pencarian
     lokasi_pencarian = f"{filter_blok} - {filter_pen}" if filter_blok != "Format Lama" else filter_pen
@@ -64,15 +66,19 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
 
         if submit_timbang:
             # Hitung ADG otomatis memanfaatkan fungsi dari app.py
-            adg_terbaru = calculate_adg(row_sapi["Tgl Masuk"], row_sapi["Bobot Awal (kg)"], tgl_timbang_sekarang.strftime("%Y-%m-%d"), bobot_timbang_baru)
+            adg_terbaru = float(calculate_adg(row_sapi["Tgl Masuk"], row_sapi["Bobot Awal (kg)"], tgl_timbang_sekarang.strftime("%Y-%m-%d"), bobot_timbang_baru))
             
             # Update data ke master dataframe
             df_sapi.at[idx_master, "Tgl Cek Akhir"] = tgl_timbang_sekarang.strftime("%Y-%m-%d")
             df_sapi.at[idx_master, "Bobot Akhir (kg)"] = float(bobot_timbang_baru)
-            df_sapi.at[idx_master, "ADG (kg/hari)"] = float(adg_terbaru)
+            df_sapi.at[idx_master, "ADG (kg/hari)"] = adg_terbaru
             
             save_data(df_sapi)
             add_activity_log(user_name, "Timbangan Rutin", f"Menimbang Sapi {row_sapi['Kode Sapi']} di {row_sapi['Lokasi Pen']} dengan bobot {bobot_timbang_baru}kg (ADG Baru: {adg_terbaru} kg/hari)")
             
-            st.success(f"🎉 Sukses! Bobot Sapi {row_sapi['Kode Sapi']} diperbarui ke {bobot_timbang_baru} kg dengan raihan ADG {adg_terbaru} kg/hari.")
-            st.rerun()
+            # --- INTEGRASI FITUR ALARM PERINGATAN REAL-TIME ---
+            if adg_terbaru < TARGET_ADG:
+                st.error(f"⚠️ **ALARM PERFORMA RENDAH:** Sapi {row_sapi['Kode Sapi']} berhasil disimpan, namun ADG hanya mencapai `{adg_terbaru} kg/hari` (Di bawah target standar {TARGET_ADG} kg/hari!). Segera catat untuk pemeriksaan kesehatan.")
+            else:
+                st.success(f"🎉 Sukses! Bobot Sapi {row_sapi['Kode Sapi']} diperbarui ke {bobot_timbang_baru} kg dengan capaian ADG Bagus: `{adg_terbaru} kg/hari`.")
+                st.balloons()
