@@ -52,7 +52,11 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
     idx_master = df_sapi[df_sapi["Kode Sapi"] == kode_sapi_asli].index[0]
     row_sapi = df_sapi.iloc[idx_master]
 
-    st.info(f"📋 **Data Historis Sapi:**\n* Tanggal Masuk Area: {row_sapi['Tgl Masuk']} | Berat Awal: {row_sapi['Bobot Awal (kg)']} kg\n* Timbangan Terakhir: {row_sapi['Tgl Cek Akhir']} | Berat Akhir: {row_sapi['Bobot Akhir (kg)']} kg")
+    # Beri tahu operator status penimbangan saat ini
+    is_penimbangan_pertama = (str(row_sapi['Tgl Cek Akhir']) == str(row_sapi['Tgl Masuk']))
+    status_timbang_text = "🟢 PENIMBANGAN PERTAMA (Evaluasi Awal Masa Karantina)" if is_penimbangan_pertama else "🔵 PENIMBANGAN BERKALA / RUTIN"
+
+    st.info(f"📋 **Data Historis Sapi:** ({status_timbang_text})\n* Tanggal Masuk Area: {row_sapi['Tgl Masuk']} | Berat Awal: {row_sapi['Bobot Awal (kg)']} kg\n* Timbangan Terakhir: {row_sapi['Tgl Cek Akhir']} | Berat Akhir: {row_sapi['Bobot Akhir (kg)']} kg")
 
     st.markdown("---")
     with st.form("form_timbangan_berkala", clear_on_submit=True):
@@ -76,9 +80,10 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
             save_data(df_sapi)
             add_activity_log(user_name, "Timbangan Rutin", f"Menimbang Sapi {row_sapi['Kode Sapi']} di {row_sapi['Lokasi Pen']} dengan bobot {bobot_timbang_baru}kg (ADG Baru: {adg_terbaru} kg/hari)")
             
-            # --- INTEGRASI FITUR ALARM PERINGATAN REAL-TIME ---
+            # Alarm peringatan real-time saat timbangan baru di-submit
             if adg_terbaru < TARGET_ADG:
-                st.error(f"⚠️ **ALARM PERFORMA RENDAH:** Sapi {row_sapi['Kode Sapi']} berhasil disimpan, namun ADG hanya mencapai `{adg_terbaru} kg/hari` (Di bawah target standar {TARGET_ADG} kg/hari!). Segera catat untuk pemeriksaan kesehatan.")
+                st.error(f"⚠️ **ALARM PERFORMA RENDAH:** Sapi {row_sapi['Kode Sapi']} berhasil disimpan. ADG hasil timbangan berkala ini hanya mencapai `{adg_terbaru} kg/hari` (Di bawah target standar {TARGET_ADG} kg/hari). Direkomendasikan cek kesehatan/pakan.")
             else:
                 st.success(f"🎉 Sukses! Bobot Sapi {row_sapi['Kode Sapi']} diperbarui ke {bobot_timbang_baru} kg dengan capaian ADG Bagus: `{adg_terbaru} kg/hari`.")
                 st.balloons()
+            st.rerun()
