@@ -42,44 +42,43 @@ sheet = get_google_sheet()
 # --- FUNGSI PEMBANTU BACA & TULIS SPREADSHEET TABS ---
 def read_sheet_to_df(worksheet_name, default_cols):
     global sheet
-    # INTEGRASI FITUR: Animasi Spinner Utama Saat Membaca Data Cloud/Lokal
-    with st.spinner(f"⏳ Membuka database, sedang memuat data {worksheet_name.replace('_', ' ')}..."):
-        if not sheet:
-            file_name = f"{worksheet_name}.csv"
-            if os.path.exists(file_name): return pd.read_csv(file_name)
-            return pd.DataFrame(columns=default_cols)
+    # Spinner di sini dihapus agar tidak terjadi 'blinking' beruntun saat startup/refresh
+    if not sheet:
+        file_name = f"{worksheet_name}.csv"
+        if os.path.exists(file_name): return pd.read_csv(file_name)
+        return pd.DataFrame(columns=default_cols)
+        
+    for percobaan in range(3):
+        try:
+            worksheet_list = sheet.worksheets()
+            existing_titles = {w.title.strip().lower(): w.title for w in worksheet_list}
+            target_title = worksheet_name.strip().lower()
             
-        for percobaan in range(3):
-            try:
-                worksheet_list = sheet.worksheets()
-                existing_titles = {w.title.strip().lower(): w.title for w in worksheet_list}
-                target_title = worksheet_name.strip().lower()
+            if target_title in existing_titles:
+                worksheet = sheet.worksheet(existing_titles[target_title])
+            else:
+                worksheet = sheet.add_worksheet(title=worksheet_name, rows="1000", cols="20")
+                worksheet.append_row(default_cols)
+                return pd.DataFrame(columns=default_cols)
                 
-                if target_title in existing_titles:
-                    worksheet = sheet.worksheet(existing_titles[target_title])
-                else:
-                    worksheet = sheet.add_worksheet(title=worksheet_name, rows="1000", cols="20")
-                    worksheet.append_row(default_cols)
-                    return pd.DataFrame(columns=default_cols)
-                    
-                data = worksheet.get_all_records()
-                if not data: return pd.DataFrame(columns=default_cols)
-                return pd.DataFrame(data)
-                
-            except Exception as e:
-                if percobaan < 2:
-                    time.sleep(1)
-                    continue
-                else:
-                    st.warning(f"⚠️ Koneksi Google Sheets sibuk sesaat. Menggunakan data cadangan lokal.")
-                    file_name = f"{worksheet_name}.csv"
-                    if os.path.exists(file_name): return pd.read_csv(file_name)
-                    return pd.DataFrame(columns=default_cols)
+            data = worksheet.get_all_records()
+            if not data: return pd.DataFrame(columns=default_cols)
+            return pd.DataFrame(data)
+            
+        except Exception as e:
+            if percobaan < 2:
+                time.sleep(1)
+                continue
+            else:
+                st.warning(f"⚠️ Koneksi Google Sheets sibuk sesaat. Menggunakan data cadangan lokal.")
+                file_name = f"{worksheet_name}.csv"
+                if os.path.exists(file_name): return pd.read_csv(file_name)
+                return pd.DataFrame(columns=default_cols)
 
 def write_df_to_sheet(worksheet_name, df, default_cols):
     global sheet
-    # INTEGRASI FITUR: Animasi Spinner Utama Saat Menyimpan Data ke Cloud/Lokal
-    with st.spinner(f"💾 Sedang mengunggah dan mengamankan data {worksheet_name.replace('_', ' ')} ke database..."):
+    # Spinner di sini dipertahankan untuk mendeteksi animasi "Simpan Data" di setiap menu form
+    with st.spinner(f"💾 Sedang mengunggah dan mengamankan data {worksheet_name.replace('_', ' ')} ke Google Sheets..."):
         df = df.reindex(columns=default_cols).fillna("")
         df.to_csv(f"{worksheet_name}.csv", index=False)
         if not sheet: return
@@ -312,24 +311,13 @@ if not st.session_state["logged_in"]:
 
 # --- KONDISI SUDAH LOGIN ---
 else:
-    df_sapi = load_data()
-    df_panen = load_panen_data()
-    df_truk = load_truk_data()
-    LIST_JENIS_SAPI = load_jenis_sapi()
-
-    # --- TAMPILAN HALAMAN UTAMA KANDANG ---
-    st.title("🐂 Sistem Monitoring Penggemukan Sapi Impor & Lokal")
-    
-    if sheet:
-        st.success("Aplikasi ini sekarang terhubung online dengan Google Sheets! 🚀")
-    else:
-        st.warning("⚠️ Aplikasi berjalan dalam mode LOKAL (Gagal terhubung ke Google Sheets).")
-    st.markdown("---")
-
     user_role = st.session_state["role"]
     user_name = st.session_state["username"]
     daftar_menu_user = st.session_state.get("allowed_menus", [ALL_MENUS[0]])
 
+    # 1. RENDER STRUKTUR STRUKTUR HALAMAN UTAMA TERLEBIH DAHULU (Agar Spinner punya jangkar visual)
+    st.title("🐂 Sistem Monitoring Penggemukan Sapi Impor & Lokal")
+    
     # SIDEBAR PANEL CONTROL
     st.sidebar.markdown("### 👤 Pengguna Aktif")
     st.sidebar.info(f"**User:** {user_name.upper()}\n\n**Hak Akses:** {user_role}")
@@ -345,6 +333,21 @@ else:
         
     st.sidebar.markdown("---")
     menu = st.sidebar.selectbox("PILIH MENU APLIKASI", daftar_menu_user)
+
+    # 2. PROSES MEMUAT DATA DIKUMPULKAN DI SINI DI DALAM SATU SPINNER MAKRO UTAMA
+    # Menangani Load Data, Ganti Menu, dan Refresh Halaman Sekaligus
+    with st.spinner("⏳ Menyelaraskan koneksi cloud... Sedang mengunduh seluruh database master kandang terbaru..."):
+        df_sapi = load_data()
+        df_panen = load_panen_data()
+        df_truk = load_truk_data()
+        LIST_JENIS_SAPI = load_jenis_sapi()
+
+    # Tampilkan status koneksi tepat di bawah judul setelah data ter-load sempurna
+    if sheet:
+        st.success("Aplikasi ini sekarang terhubung online dengan Google Sheets! 🚀")
+    else:
+        st.warning("⚠️ Aplikasi berjalan dalam mode LOKAL (Gagal terhubung ke Google Sheets).")
+    st.markdown("---")
 
     # ==================== CONTROLLER MENU ROUTING ====================
     if menu == "📊 Dashboard & Tabel Monitor":
