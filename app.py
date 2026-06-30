@@ -191,11 +191,11 @@ def save_users(df):
 
 # --- DATA LOADER FUNCTIONS ---
 def load_truk_data():
-    cols = ["No Transaksi", "Tanggal", "No Plat / Armada", "Keterangan Muatan", "Bruto / Kotor (kg)", "Tara / Kosong (kg)", "Netto / Bersih (kg)", "Jumlah Sapi (Ekor)", "Rata-rata / Ekor (kg)", "Operator Lapangan"]
+    cols = ["No Transaksi", "Tanggal", "Nama Lokasi Penimbangan", "No Plat / Armada", "Keterangan Muatan", "Bruto / Kotor (kg)", "Tara / Kosong (kg)", "Netto / Bersih (kg)", "Jumlah Sapi (Ekor)", "Daftar RFID/EarTag", "Rata-rata / Ekor (kg)", "Operator Lapangan"]
     return read_sheet_to_df("timbangan_truk", cols)
 
 def save_truk_data(df):
-    cols = ["No Transaksi", "Tanggal", "No Plat / Armada", "Keterangan Muatan", "Bruto / Kotor (kg)", "Tara / Kosong (kg)", "Netto / Bersih (kg)", "Jumlah Sapi (Ekor)", "Rata-rata / Ekor (kg)", "Operator Lapangan"]
+    cols = ["No Transaksi", "Tanggal", "Nama Lokasi Penimbangan", "No Plat / Armada", "Keterangan Muatan", "Bruto / Kotor (kg)", "Tara / Kosong (kg)", "Netto / Bersih (kg)", "Jumlah Sapi (Ekor)", "Daftar RFID/EarTag", "Rata-rata / Ekor (kg)", "Operator Lapangan"]
     write_df_to_sheet("timbangan_truk", df, cols)
 
 def load_jenis_sapi():
