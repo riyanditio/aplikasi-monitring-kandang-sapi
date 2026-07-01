@@ -24,7 +24,7 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
             struktur_kandang[blok].append(pen)
         else:
             if "Lainnya" not in struktur_kandang:
-                shortcut_kandang["Lainnya"] = []
+                struktur_kandang["Lainnya"] = []  # FIX TYPO: Mengubah shortcut_kandang menjadi struktur_kandang
             struktur_kandang["Lainnya"].append(item)
 
     # Pemisahan Halaman Menjadi 2 Tab Utama
@@ -72,9 +72,13 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
         opsi_sapi = df_sapi.apply(lambda r: f"{r['Kode Sapi']} - {r['RFID/Tag']} (Sekarang di: {r['Lokasi Pen']})", axis=1).tolist()
         sapi_terpilih = st.selectbox("Pilih Sapi Yang Akan Dimutasi:", opsi_sapi)
         
-        # FIX KOREKSI: Cari index menggunakan Kode Sapi unik agar sinkron penuh dengan Google Sheets
-        kode_sapi_asli = sapi_terpilih.split(" - ")[0]
-        idx_master = df_sapi[df_sapi["Kode Sapi"] == kode_sapi_asli].index[0]
+        # FIX JAMINAN SINKRON: Pecah string opsi untuk mengambil Kode Sapi DAN RFID secara spesifik
+        bagian_depan = sapi_terpilih.split(" (Sekarang di:")[0]
+        kode_sapi_asli = bagian_depan.split(" - ")[0]
+        rfid_sapi_asli = bagian_depan.split(" - ")[1]
+        
+        # Cari index master berdasarkan kecocokan KEDUA parameter kunci (Kode Sapi & RFID/Tag)
+        idx_master = df_sapi[(df_sapi["Kode Sapi"] == kode_sapi_asli) & (df_sapi["RFID/Tag"] == rfid_sapi_asli)].index[0]
         sapi_row = df_sapi.loc[idx_master]
         
         # --- INTEGRASI: Tampilkan info RFID/Tag Asal di lembar info mutasi ---
@@ -99,7 +103,7 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
         if st.button("🚀 Eksekusi Pemindahan Sapi", type="primary", use_container_width=True, disabled=not tombol_siap):
             lokasi_asal = sapi_row["Lokasi Pen"]
             
-            # FIX KOREKSI: Update langsung ke label baris master yang benar
+            # Update langsung menggunakan idx_master ganda yang sudah tervalidasi aman
             df_sapi.at[idx_master, "Lokasi Pen"] = full_lokasi_tujuan
             save_data(df_sapi)
             

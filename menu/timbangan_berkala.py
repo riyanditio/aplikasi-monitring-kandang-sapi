@@ -47,10 +47,12 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
     opsi_sapi = df_sapi_terfilter.apply(lambda r: f"{r['Kode Sapi']} - RFID: {r['RFID/Tag']}", axis=1).tolist()
     sapi_pilihan = st.selectbox("Pilih Kode Sapi Yang Ditimbang:", opsi_sapi)
     
-    kode_sapi_asli = sapi_pilihan.split(" - ")[0]
-    idx_master = df_sapi[df_sapi["Kode Sapi"] == kode_sapi_asli].index[0]
+    # FIX JAMINAN SINKRON: Ekstrak Kode Sapi DAN RFID secara presisi untuk memecah masalah kode duplikat (S1, S2, dst)
+    kode_sapi_asli = sapi_pilihan.split(" - RFID: ")[0]
+    rfid_sapi_asli = sapi_pilihan.split(" - RFID: ")[1]
     
-    # FIX KOREKSI: Gunakan .loc (label-based) bukan .iloc (position-based) untuk menjamin keakuratan data
+    # Cari index master berdasarkan kecocokan KEDUA parameter kunci (Kode Sapi & RFID/Tag)
+    idx_master = df_sapi[(df_sapi["Kode Sapi"] == kode_sapi_asli) & (df_sapi["RFID/Tag"] == rfid_sapi_asli)].index[0]
     row_sapi = df_sapi.loc[idx_master]
 
     is_penimbangan_pertama = (str(row_sapi['Tgl Cek Akhir']) == str(row_sapi['Tgl Masuk']))
