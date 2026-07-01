@@ -50,16 +50,17 @@ def tampilkan_dashboard(df_sapi):
             df_underperform_view = df_underperform_view.rename(columns=rename_underperform)
             
             with st.expander("🔍 Lihat Daftar Sapi Performa Rendah"):
+                # FIX: Menghapus parameter width statis agar tabel auto-size sempurna
                 st.dataframe(
                     df_underperform_view[["Kode Tiba", "Jenis Sapi", "Lokasi Pen", "ADG (kg/hari)", "Tgl Cek Akhir"]].sort_values(by="ADG (kg/hari)"),
                     use_container_width=True,
                     hide_index=True,
                     column_config={
-                        "Kode Tiba": st.column_config.TextColumn("Kode Tiba", width="medium"),
-                        "Jenis Sapi": st.column_config.TextColumn("Jenis Sapi", width="medium"),
-                        "Lokasi Pen": st.column_config.TextColumn("Lokasi Pen", width="medium"),
-                        "ADG (kg/hari)": st.column_config.NumberColumn("ADG (kg/hari)", format="%.2f", width="small"),
-                        "Tgl Cek Akhir": st.column_config.TextColumn("Tgl Cek Akhir", width="small")
+                        "Kode Tiba": st.column_config.TextColumn("Kode Tiba"),
+                        "Jenis Sapi": st.column_config.TextColumn("Jenis Sapi"),
+                        "Lokasi Pen": st.column_config.TextColumn("Lokasi Pen"),
+                        "ADG (kg/hari)": st.column_config.NumberColumn("ADG (kg/hari)", format="%.2f"),
+                        "Tgl Cek Akhir": st.column_config.TextColumn("Tgl Cek Akhir")
                     }
                 )
         else:
@@ -113,23 +114,23 @@ def tampilkan_dashboard(df_sapi):
         cols_order.insert(idx_kode_tiba + 1, "RFID/Tag Asal")
         df_monitor = df_monitor[cols_order]
 
-    # 3. Tampilkan Tabel Utama dengan Batasan Lebar (Column Config) agar teks Wrap & Proporsional
+    # FIX: Seluruh batasan width kaku di bawah ini dihapus agar tabel melebar otomatis mengikuti layar
     st.dataframe(
         df_monitor, 
         use_container_width=True, 
         hide_index=True,
         column_config={
-            "Kode Tiba": st.column_config.TextColumn("Kode Tiba", width="medium"),
-            "RFID/Tag Asal": st.column_config.TextColumn("RFID/Tag Asal", width="medium"),
-            "RFID/Tag Kandang": st.column_config.TextColumn("RFID/Tag Kandang", width="medium"),
-            "Jenis Sapi": st.column_config.TextColumn("Jenis Sapi", width="medium"),
-            "Lokasi Pen": st.column_config.TextColumn("Lokasi Pen", width="small"),
-            "Bobot Awal (kg)": st.column_config.NumberColumn("Bobot Awal (kg)", format="%d", width="small"),
-            "Bobot Akhir (kg)": st.column_config.NumberColumn("Bobot Akhir (kg)", format="%d", width="small"),
-            "ADG (kg/hari)": st.column_config.NumberColumn("ADG (kg/hari)", format="%.2f", width="small"),
-            "Total Pakan (kg)": st.column_config.NumberColumn("Total Pakan (kg)", format="%.2f", width="small"),
-            "Tgl Masuk": st.column_config.TextColumn("Tgl Masuk", width="small"),
-            "Tgl Cek Akhir": st.column_config.TextColumn("Tgl Cek Akhir", width="small"),
-            "Tgl Pakan Terakhir": st.column_config.TextColumn("Tgl Pakan Terakhir", width="small"),
+            "Kode Tiba": st.column_config.TextColumn("Kode Tiba"),
+            "RFID/Tag Asal": st.column_config.TextColumn("RFID/Tag Asal"),
+            "RFID/Tag Kandang": st.column_config.TextColumn("RFID/Tag Kandang"),
+            "Jenis Sapi": st.column_config.TextColumn("Jenis Sapi"),
+            "Lokasi Pen": st.column_config.TextColumn("Lokasi Pen"),
+            "Bobot Awal (kg)": st.column_config.NumberColumn("Bobot Awal (kg)", format="%d"),
+            "Bobot Akhir (kg)": st.column_config.NumberColumn("Bobot Akhir (kg)", format="%d"),
+            "ADG (kg/hari)": st.column_config.NumberColumn("ADG (kg/hari)", format="%.2f"),
+            "Total Pakan (kg)": st.column_config.NumberColumn("Total Pakan (kg)", format="%.2f"),
+            "Tgl Masuk": st.column_config.TextColumn("Tgl Masuk"),
+            "Tgl Cek Akhir": st.column_config.TextColumn("Tgl Cek Akhir"),
+            "Tgl Pakan Terakhir": st.column_config.TextColumn("Tgl Pakan Terakhir"),
         }
     )
