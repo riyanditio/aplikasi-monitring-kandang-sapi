@@ -4,16 +4,14 @@ from datetime import datetime
 
 def tampilkan_menu_registrasi(df_sapi, list_jenis_sapi, struktur_kandang, save_data, add_activity_log, user_name):
     st.subheader("➕ Registrasi Sapi Baru Masuk Kandang")
-    st.markdown("Silakan masukkan data sapi baru secara lengkap. **Kode Tiba** bisa diisi sama untuk kuantiti sapi yang banyak (kloter), sedangkan **Kode Sapi** harus unik per ekor.")
+    st.markdown("Silakan masukkan data batch sapi baru. **Kode Tiba** bisa diisi sama untuk kuantiti sapi yang banyak.")
 
     with st.form("form_registrasi_sapi", clear_on_submit=True):
         col1, col2 = st.columns(2)
 
         with col1:
-            # --- PENYESUAIAN UTAMA: Pemisahan Kode Tiba (Kloter) dan Kode Sapi (Individu) ---
-            kode_tiba = st.text_input("Kode Tiba / No. Batch Kedatangan", placeholder="Contoh: TIB-2026-08A").strip()
-            kode_sapi = st.text_input("Kode Sapi / ID Anting Individual (Harus Unik)", placeholder="Contoh: SP-001").strip()
-            
+            # --- PERBAIKAN: Menggunakan Kode Tiba sebagai identitas utama & BISA DUPLIKAT ---
+            kode_tiba = st.text_input("Kode Tiba / No. Batch Kedatangan", placeholder="Contoh: S2").strip()
             rfid_tag_asal = st.text_input("RFID / Tag Asal (Opsional)", placeholder="Scan/ketik RFID bawaan asal supplier").strip()
             rfid_tag_kandang = st.text_input("RFID / Tag Kandang (Opsional)", placeholder="Scan/ketik nomor RFID internal kandang").strip()
             
@@ -41,26 +39,25 @@ def tampilkan_menu_registrasi(df_sapi, list_jenis_sapi, struktur_kandang, save_d
         if submit_btn:
             # 1. Validasi Input Wajib
             if not kode_tiba:
-                st.error("❌ Gagal Simpan! 'Kode Tiba / No. Batch Kedatangan' wajib diisi untuk pemeriksaan kelompok.")
-                return
-            if not kode_sapi:
-                st.error("❌ Gagal Simpan! 'Kode Sapi / ID Anting Individual' wajib diisi.")
+                st.error("❌ Gagal Simpan! 'Kode Tiba / No. Batch Kedatangan' wajib diisi.")
                 return
 
-            # 2. Validasi Keunikan: Hanya mengecek Kode Sapi (Kode Tiba sengaja dilewati agar bisa duplikat)
-            if not df_sapi.empty and kode_sapi.lower() in df_sapi["Kode Sapi"].astype(str).str.lower().values:
-                st.error(f"❌ Gagal Simpan! Kode Sapi '{kode_sapi}' sudah terdaftar di sistem. Setiap ekor harus unik!")
-                return
+            # 2. Validasi Keunikan Elektronik (Hanya mengunci RFID Kandang jika diisi, agar data scan alat tidak tertukar)
+            if rfid_tag_kandang and rfid_tag_kandang != "-":
+                if not df_sapi.empty and "RFID/Tag" in df_sapi.columns:
+                    if rfid_tag_kandang.lower() in df_sapi["RFID/Tag"].astype(str).str.lower().values:
+                        st.error(f"❌ Gagal Simpan! RFID Kandang '{rfid_tag_kandang}' sudah digunakan oleh sapi lain.")
+                        return
 
             # Gabungkan Nama Blok dan Pen untuk disimpan ke kolom 'Lokasi Pen' di database
             lokasi_pen_final = f"{pilihan_blok} - {pilihan_pen}"
 
-            # Siapkan baris data baru termasuk kolom 'Kode Tiba' dan 'RFID/Tag Asal'
+            # Siapkan baris data baru dengan menyisipkan kolom 'RFID/Tag Asal' ke dalam database
             new_cow = {
-                "Kode Tiba": kode_tiba,                                     # Kolom kelompok baru (Bisa duplikat)
-                "Kode Sapi": kode_sapi,                                     # Key internal individual (Harus unik)
-                "RFID/Tag Asal": rfid_tag_asal if rfid_tag_asal else "-",   # Kolom Tag Lama Supplier
-                "RFID/Tag": rfid_tag_kandang if rfid_tag_kandang else "-",   # Key internal tag kandang baru
+                "Kode Tiba": kode_tiba,                                    # Menyimpan kode batch kelompok
+                "Kode Sapi": kode_tiba,                                    # Disamakan dengan kode tiba agar backward-compatible dengan menu lain
+                "RFID/Tag Asal": rfid_tag_asal if rfid_tag_asal else "-",  # Kolom Baru terintegrasi ke Sheet
+                "RFID/Tag": rfid_tag_kandang if rfid_tag_kandang else "-",  # Key internal penunjuk tag kandang
                 "Jenis Sapi": jenis_sapi,
                 "Jenis Kelamin": jenis_kelamin,
                 "Umur Masuk (Bulan)": int(umur_masuk),
@@ -80,8 +77,8 @@ def tampilkan_menu_registrasi(df_sapi, list_jenis_sapi, struktur_kandang, save_d
             save_data(df_baru)
             
             # Catat ke log aktivitas operator
-            add_activity_log(user_name, "Registrasi Sapi", f"Mendaftarkan Sapi {kode_sapi} (Kelompok: {kode_tiba}) di {lokasi_pen_final}")
+            add_activity_log(user_name, "Registrasi Sapi", f"Mendaftarkan Sapi Kelompok {kode_tiba} di {lokasi_pen_final}")
             
-            st.success(f"🎉 Berhasil! Sapi dengan ID Anting {kode_sapi} (Kelompok {kode_tiba}) telah berhasil didaftarkan di {lokasi_pen_final}.")
+            st.success(f"🎉 Berhasil! Sapi dengan Kode Tiba {kode_tiba} telah berhasil didaftarkan di {lokasi_pen_final}.")
             st.balloons()
             st.rerun()
