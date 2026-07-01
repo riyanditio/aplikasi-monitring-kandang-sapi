@@ -10,6 +10,11 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
         st.warning("⚠️ Belum ada data sapi aktif yang tersedia untuk ditimbang.")
         return
 
+    # --- FIX: Paksa kolom numerik menjadi Float agar tidak memicu TypeError saat input desimal ---
+    df_sapi["Bobot Awal (kg)"] = pd.to_numeric(df_sapi["Bobot Awal (kg)"], errors='coerce').fillna(0.0).astype(float)
+    df_sapi["Bobot Akhir (kg)"] = pd.to_numeric(df_sapi["Bobot Akhir (kg)"], errors='coerce').fillna(0.0).astype(float)
+    df_sapi["ADG (kg/hari)"] = pd.to_numeric(df_sapi["ADG (kg/hari)"], errors='coerce').fillna(0.0).astype(float)
+
     TARGET_ADG = 1.6
 
     list_lokasi_eksis = df_sapi["Lokasi Pen"].unique()
