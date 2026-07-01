@@ -39,11 +39,28 @@ def tampilkan_dashboard(df_sapi):
 
         if not df_underperform.empty:
             st.warning(f"⚠️ **PERINGATAN DETEKSI PERFORMA:** Ditemukan **{len(df_underperform)} ekor** sapi dalam masa penggemukan aktif dengan pertumbuhan di bawah target ({TARGET_ADG} kg/hari). Perlu evaluasi pakan atau kesehatan!")
+            
+            # Koreksi visualisasi header pada tabel peringatan performa rendah
+            df_underperform_view = df_underperform.copy()
+            rename_underperform = {}
+            if "Kode Sapi" in df_underperform_view.columns:
+                rename_underperform["Kode Sapi"] = "Kode Tiba"
+            if "RFID/Tag" in df_underperform_view.columns:
+                rename_underperform["RFID/Tag"] = "RFID/Tag Kandang"
+            df_underperform_view = df_underperform_view.rename(columns=rename_underperform)
+            
             with st.expander("🔍 Lihat Daftar Sapi Performa Rendah"):
                 st.dataframe(
-                    df_underperform[["Kode Sapi", "Jenis Sapi", "Lokasi Pen", "ADG (kg/hari)", "Tgl Cek Akhir"]].sort_values(by="ADG (kg/hari)"),
+                    df_underperform_view[["Kode Tiba", "Jenis Sapi", "Lokasi Pen", "ADG (kg/hari)", "Tgl Cek Akhir"]].sort_values(by="ADG (kg/hari)"),
                     use_container_width=True,
-                    hide_index=True
+                    hide_index=True,
+                    column_config={
+                        "Kode Tiba": st.column_config.TextColumn("Kode Tiba", width="medium"),
+                        "Jenis Sapi": st.column_config.TextColumn("Jenis Sapi", width="medium"),
+                        "Lokasi Pen": st.column_config.TextColumn("Lokasi Pen", width="medium"),
+                        "ADG (kg/hari)": st.column_config.NumberColumn("ADG (kg/hari)", format="%.2f", width="small"),
+                        "Tgl Cek Akhir": st.column_config.TextColumn("Tgl Cek Akhir", width="small")
+                    }
                 )
         else:
             st.success(f"✅ **Kondisi Bagus:** Semua sapi yang sudah ditimbang berkala berhasil mencapai atau melewati target pertumbuhan {TARGET_ADG} kg/hari!")
@@ -73,4 +90,46 @@ def tampilkan_dashboard(df_sapi):
 
     st.markdown("---")
     st.markdown("### 📋 Tabel Monitor Seluruh Sapi di Area")
-    st.dataframe(df_sapi.drop(columns=['Blok Kandang']), use_container_width=True, hide_index=True)
+    
+    # ==================== PROSES ADAPTASI STRUKTUR TABEL BARU ====================
+    df_monitor = df_sapi.drop(columns=['Blok Kandang']).copy()
+    
+    # 1. Ganti judul kolom Lama ke Baru
+    rename_main = {}
+    if "Kode Sapi" in df_monitor.columns:
+        rename_main["Kode Sapi"] = "Kode Tiba"
+    if "RFID/Tag" in df_monitor.columns:
+        rename_main["RFID/Tag"] = "RFID/Tag Kandang"
+    df_monitor = df_monitor.rename(columns=rename_main)
+    
+    # 2. Sisipkan Kolom 'RFID/Tag Asal' tepat setelah 'Kode Tiba'
+    if "RFID/Tag Asal" not in df_monitor.columns:
+        df_monitor["RFID/Tag Asal"] = "-"  # Penanda default strip sebelum database di-migrasi
+        
+    cols_order = list(df_monitor.columns)
+    if "Kode Tiba" in cols_order and "RFID/Tag Asal" in cols_order:
+        cols_order.remove("RFID/Tag Asal")
+        idx_kode_tiba = cols_order.index("Kode Tiba")
+        cols_order.insert(idx_kode_tiba + 1, "RFID/Tag Asal")
+        df_monitor = df_monitor[cols_order]
+
+    # 3. Tampilkan Tabel Utama dengan Batasan Lebar (Column Config) agar teks Wrap & Proporsional
+    st.dataframe(
+        df_monitor, 
+        use_container_width=True, 
+        hide_index=True,
+        column_config={
+            "Kode Tiba": st.column_config.TextColumn("Kode Tiba", width="medium"),
+            "RFID/Tag Asal": st.column_config.TextColumn("RFID/Tag Asal", width="medium"),
+            "RFID/Tag Kandang": st.column_config.TextColumn("RFID/Tag Kandang", width="medium"),
+            "Jenis Sapi": st.column_config.TextColumn("Jenis Sapi", width="medium"),
+            "Lokasi Pen": st.column_config.TextColumn("Lokasi Pen", width="small"),
+            "Bobot Awal (kg)": st.column_config.NumberColumn("Bobot Awal (kg)", format="%d", width="small"),
+            "Bobot Akhir (kg)": st.column_config.NumberColumn("Bobot Akhir (kg)", format="%d", width="small"),
+            "ADG (kg/hari)": st.column_config.NumberColumn("ADG (kg/hari)", format="%.2f", width="small"),
+            "Total Pakan (kg)": st.column_config.NumberColumn("Total Pakan (kg)", format="%.2f", width="small"),
+            "Tgl Masuk": st.column_config.TextColumn("Tgl Masuk", width="small"),
+            "Tgl Cek Akhir": st.column_config.TextColumn("Tgl Cek Akhir", width="small"),
+            "Tgl Pakan Terakhir": st.column_config.TextColumn("Tgl Pakan Terakhir", width="small"),
+        }
+    )
