@@ -49,7 +49,9 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
     
     kode_sapi_asli = sapi_pilihan.split(" - ")[0]
     idx_master = df_sapi[df_sapi["Kode Sapi"] == kode_sapi_asli].index[0]
-    row_sapi = df_sapi.iloc[idx_master]
+    
+    # FIX KOREKSI: Gunakan .loc (label-based) bukan .iloc (position-based) untuk menjamin keakuratan data
+    row_sapi = df_sapi.loc[idx_master]
 
     is_penimbangan_pertama = (str(row_sapi['Tgl Cek Akhir']) == str(row_sapi['Tgl Masuk']))
     status_timbang_text = "🟢 PENIMBANGAN PERTAMA (Evaluasi Awal Masa Karantina)" if is_penimbangan_pertama else "🔵 PENIMBANGAN BERKALA / RUTIN"

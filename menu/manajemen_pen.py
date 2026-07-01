@@ -24,7 +24,7 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
             struktur_kandang[blok].append(pen)
         else:
             if "Lainnya" not in struktur_kandang:
-                struktur_kandang["Lainnya"] = []
+                shortcut_kandang["Lainnya"] = []
             struktur_kandang["Lainnya"].append(item)
 
     # Pemisahan Halaman Menjadi 2 Tab Utama
@@ -72,8 +72,10 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
         opsi_sapi = df_sapi.apply(lambda r: f"{r['Kode Sapi']} - {r['RFID/Tag']} (Sekarang di: {r['Lokasi Pen']})", axis=1).tolist()
         sapi_terpilih = st.selectbox("Pilih Sapi Yang Akan Dimutasi:", opsi_sapi)
         
-        idx_sapi = opsi_sapi.index(sapi_terpilih)
-        sapi_row = df_sapi.iloc[idx_sapi]
+        # FIX KOREKSI: Cari index menggunakan Kode Sapi unik agar sinkron penuh dengan Google Sheets
+        kode_sapi_asli = sapi_terpilih.split(" - ")[0]
+        idx_master = df_sapi[df_sapi["Kode Sapi"] == kode_sapi_asli].index[0]
+        sapi_row = df_sapi.loc[idx_master]
         
         # --- INTEGRASI: Tampilkan info RFID/Tag Asal di lembar info mutasi ---
         st.info(f"📋 **Detail Sapi Terpilih:**\n* Kode Sapi: {sapi_row['Kode Sapi']} | RFID Asal: {sapi_row.get('RFID/Tag Asal', '-')}\n* RFID Baru: {sapi_row['RFID/Tag']} | Jenis: {sapi_row['Jenis Sapi']} | Bobot Terakhir: {sapi_row['Bobot Akhir (kg)']} kg\n* Lokasi Sekarang: **{sapi_row['Lokasi Pen']}**")
@@ -97,7 +99,8 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
         if st.button("🚀 Eksekusi Pemindahan Sapi", type="primary", use_container_width=True, disabled=not tombol_siap):
             lokasi_asal = sapi_row["Lokasi Pen"]
             
-            df_sapi.at[idx_sapi, "Lokasi Pen"] = full_lokasi_tujuan
+            # FIX KOREKSI: Update langsung ke label baris master yang benar
+            df_sapi.at[idx_master, "Lokasi Pen"] = full_lokasi_tujuan
             save_data(df_sapi)
             
             detail_aksi = f"Memindahkan Sapi Kode {sapi_row['Kode Sapi']} (RFID Baru: {sapi_row['RFID/Tag']} | RFID Asal: {sapi_row.get('RFID/Tag Asal', '-')}) dari [{lokasi_asal}] ke [{full_lokasi_tujuan}]"
