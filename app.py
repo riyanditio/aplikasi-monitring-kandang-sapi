@@ -212,8 +212,10 @@ def save_jenis_sapi(list_jenis):
     df = pd.DataFrame({"Jenis Sapi": list_jenis})
     write_df_to_sheet("jenis_sapi", df, cols)
 
+# --- PENYESUAIAN SKEMA DATA MASTER SAPI (INTEGRASI KOLOM RFID/TAG ASAL) ---
 def load_data():
-    cols = ["Kode Sapi", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Umur Masuk (Bulan)", "Asal Negara", "Tgl Masuk", "Bobot Awal (kg)", "Tgl Cek Akhir", "Bobot Akhir (kg)", "ADG (kg/hari)", "Total Pakan (kg)", "Tgl Pakan Terakhir", "Lokasi Pen"]
+    # Menyisipkan "RFID/Tag Asal" tepat di urutan ke-2 setelah "Kode Sapi"
+    cols = ["Kode Sapi", "RFID/Tag Asal", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Umur Masuk (Bulan)", "Asal Negara", "Tgl Masuk", "Bobot Awal (kg)", "Tgl Cek Akhir", "Bobot Akhir (kg)", "ADG (kg/hari)", "Total Pakan (kg)", "Tgl Pakan Terakhir", "Lokasi Pen"]
     df = read_sheet_to_df("data_sapi", cols)
     
     if df.empty: return pd.DataFrame(columns=cols)
@@ -222,6 +224,10 @@ def load_data():
         df["Umur Masuk (Bulan)"] = 12
         df = df.drop(columns=["Umur Sapi"])
     if "Kode Sapi" not in df.columns: df["Kode Sapi"] = "-"
+    
+    # Fungsi pengaman: Jika database cloud lama belum punya kolom RFID/Tag Asal, isi dengan strip (-) otomatis
+    if "RFID/Tag Asal" not in df.columns: df["RFID/Tag Asal"] = "-"
+        
     if "Jenis Kelamin" not in df.columns: df["Jenis Kelamin"] = "Jantan"
     if "Total Pakan (kg)" not in df.columns: df["Total Pakan (kg)"] = 0.0
     if "Tgl Pakan Terakhir" not in df.columns: df["Tgl Pakan Terakhir"] = "-"
@@ -230,7 +236,8 @@ def load_data():
     return df.reindex(columns=cols)
 
 def save_data(df):
-    cols = ["Kode Sapi", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Umur Masuk (Bulan)", "Asal Negara", "Tgl Masuk", "Bobot Awal (kg)", "Tgl Cek Akhir", "Bobot Akhir (kg)", "ADG (kg/hari)", "Total Pakan (kg)", "Tgl Pakan Terakhir", "Lokasi Pen"]
+    # Menyisipkan "RFID/Tag Asal" tepat di urutan ke-2 setelah "Kode Sapi" agar tidak terpotong saat fungsi simpan dipanggil
+    cols = ["Kode Sapi", "RFID/Tag Asal", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Umur Masuk (Bulan)", "Asal Negara", "Tgl Masuk", "Bobot Awal (kg)", "Tgl Cek Akhir", "Bobot Akhir (kg)", "ADG (kg/hari)", "Total Pakan (kg)", "Tgl Pakan Terakhir", "Lokasi Pen"]
     write_df_to_sheet("data_sapi", df, cols)
 
 def load_panen_data():
