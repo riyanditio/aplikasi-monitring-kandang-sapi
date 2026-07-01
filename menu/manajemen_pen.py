@@ -24,7 +24,7 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
             struktur_kandang[blok].append(pen)
         else:
             if "Lainnya" not in struktur_kandang:
-                struktur_kandang["Lainnya"] = []  # FIX TYPO: Mengubah shortcut_kandang menjadi struktur_kandang
+                struktur_kandang["Lainnya"] = []  # FIX TYPO VS CODE: shortcut_kandang diganti menjadi struktur_kandang
             struktur_kandang["Lainnya"].append(item)
 
     # Pemisahan Halaman Menjadi 2 Tab Utama
@@ -77,9 +77,12 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
         kode_sapi_asli = bagian_depan.split(" - ")[0]
         rfid_sapi_asli = bagian_depan.split(" - ")[1]
         
-        # Cari index master berdasarkan kecocokan KEDUA parameter kunci (Kode Sapi & RFID/Tag)
-        idx_master = df_sapi[(df_sapi["Kode Sapi"] == kode_sapi_asli) & (df_sapi["RFID/Tag"] == rfid_sapi_asli)].index[0]
-        sapi_row = df_sapi.loc[idx_master]
+        # FIX ABSOLUT: Proteksi baris data menggunakan kombinasi .iloc[0] agar tidak salah sasaran karena bug indeks duplikat
+        matched_rows = df_sapi[(df_sapi["Kode Sapi"] == kode_sapi_asli) & (df_sapi["RFID/Tag"] == rfid_sapi_asli)]
+        if matched_rows.empty:
+            st.error("⚠️ Data sapi tidak ditemukan di database master.")
+            return
+        sapi_row = matched_rows.iloc[0]
         
         # --- INTEGRASI: Tampilkan info RFID/Tag Asal di lembar info mutasi ---
         st.info(f"📋 **Detail Sapi Terpilih:**\n* Kode Sapi: {sapi_row['Kode Sapi']} | RFID Asal: {sapi_row.get('RFID/Tag Asal', '-')}\n* RFID Baru: {sapi_row['RFID/Tag']} | Jenis: {sapi_row['Jenis Sapi']} | Bobot Terakhir: {sapi_row['Bobot Akhir (kg)']} kg\n* Lokasi Sekarang: **{sapi_row['Lokasi Pen']}**")
@@ -103,8 +106,9 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
         if st.button("🚀 Eksekusi Pemindahan Sapi", type="primary", use_container_width=True, disabled=not tombol_siap):
             lokasi_asal = sapi_row["Lokasi Pen"]
             
-            # Update langsung menggunakan idx_master ganda yang sudah tervalidasi aman
-            df_sapi.at[idx_master, "Lokasi Pen"] = full_lokasi_tujuan
+            # FIX ABSOLUT: Gunakan Boolean Mask (.loc[mask]) untuk mengunci baris mutasi secara rigid dan akurat
+            mask = (df_sapi["Kode Sapi"] == kode_sapi_asli) & (df_sapi["RFID/Tag"] == rfid_sapi_asli)
+            df_sapi.loc[mask, "Lokasi Pen"] = full_lokasi_tujuan
             save_data(df_sapi)
             
             detail_aksi = f"Memindahkan Sapi Kode {sapi_row['Kode Sapi']} (RFID Baru: {sapi_row['RFID/Tag']} | RFID Asal: {sapi_row.get('RFID/Tag Asal', '-')}) dari [{lokasi_asal}] ke [{full_lokasi_tujuan}]"

@@ -35,7 +35,8 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
     with cf1:
         filter_blok = st.selectbox("Pilih Blok Kandang Sapi:", list(grid_filter.keys()))
     with cf2:
-        filter_pen = st.selectbox("Pilih Nomor/Bagian Pen Sapi:", list(set(grid_filter[filter_blok])))
+        # FIX STABILITAS: Ditambahkan sorted() agar urutan daftar pen stabil dan tidak mereset pilihan saat halaman rerun
+        filter_pen = st.selectbox("Pilih Nomor/Bagian Pen Sapi:", sorted(list(set(grid_filter[filter_blok]))))
 
     lokasi_pencarian = f"{filter_blok} - {filter_pen}" if filter_blok != "Format Lama" else filter_pen
     df_sapi_terfilter = df_sapi[df_sapi["Lokasi Pen"] == lokasi_pencarian]
@@ -51,9 +52,12 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
     kode_sapi_asli = sapi_pilihan.split(" - RFID: ")[0]
     rfid_sapi_asli = sapi_pilihan.split(" - RFID: ")[1]
     
-    # Cari index master berdasarkan kecocokan KEDUA parameter kunci (Kode Sapi & RFID/Tag)
-    idx_master = df_sapi[(df_sapi["Kode Sapi"] == kode_sapi_asli) & (df_sapi["RFID/Tag"] == rfid_sapi_asli)].index[0]
-    row_sapi = df_sapi.loc[idx_master]
+    # FIX ABSOLUT: Ambil data baris menggunakan .iloc[0] langsung dari hasil filter terisolasi agar kebal dari indeks ganda
+    matched_rows = df_sapi[(df_sapi["Kode Sapi"] == kode_sapi_asli) & (df_sapi["RFID/Tag"] == rfid_sapi_asli)]
+    if matched_rows.empty:
+        st.error("⚠️ Data sapi tidak ditemukan di database master.")
+        return
+    row_sapi = matched_rows.iloc[0]
 
     is_penimbangan_pertama = (str(row_sapi['Tgl Cek Akhir']) == str(row_sapi['Tgl Masuk']))
     status_timbang_text = "🟢 PENIMBANGAN PERTAMA (Evaluasi Awal Masa Karantina)" if is_penimbangan_pertama else "🔵 PENIMBANGAN BERKALA / RUTIN"
@@ -74,9 +78,11 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
         if submit_timbang:
             adg_terbaru = float(calculate_adg(row_sapi["Tgl Masuk"], row_sapi["Bobot Awal (kg)"], tgl_timbang_sekarang.strftime("%Y-%m-%d"), bobot_timbang_baru))
             
-            df_sapi.at[idx_master, "Tgl Cek Akhir"] = tgl_timbang_sekarang.strftime("%Y-%m-%d")
-            df_sapi.at[idx_master, "Bobot Akhir (kg)"] = float(bobot_timbang_baru)
-            df_sapi.at[idx_master, "ADG (kg/hari)"] = adg_terbaru
+            # FIX ABSOLUT: Gunakan penargetan Boolean Masking (.loc[mask]) agar update kolom langsung menyasar sel data yang tepat
+            mask = (df_sapi["Kode Sapi"] == kode_sapi_asli) & (df_sapi["RFID/Tag"] == rfid_sapi_asli)
+            df_sapi.loc[mask, "Tgl Cek Akhir"] = tgl_timbang_sekarang.strftime("%Y-%m-%d")
+            df_sapi.loc[mask, "Bobot Akhir (kg)"] = float(bobot_timbang_baru)
+            df_sapi.loc[mask, "ADG (kg/hari)"] = adg_terbaru
             
             save_data(df_sapi)
             add_activity_log(user_name, "Timbangan Rutin", f"Menimbang Sapi {row_sapi['Kode Sapi']} di {row_sapi['Lokasi Pen']} dengan bobot {bobot_timbang_baru}kg (ADG Baru: {adg_terbaru} kg/hari)")
