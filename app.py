@@ -214,7 +214,6 @@ def save_jenis_sapi(list_jenis):
 
 # --- PENYESUAIAN SKEMA DATA MASTER SAPI (INTEGRASI KOLOM RFID/TAG ASAL) ---
 def load_data():
-    # Menyisipkan "RFID/Tag Asal" tepat di urutan ke-2 setelah "Kode Sapi"
     cols = ["Kode Sapi", "RFID/Tag Asal", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Umur Masuk (Bulan)", "Asal Negara", "Tgl Masuk", "Bobot Awal (kg)", "Tgl Cek Akhir", "Bobot Akhir (kg)", "ADG (kg/hari)", "Total Pakan (kg)", "Tgl Pakan Terakhir", "Lokasi Pen"]
     df = read_sheet_to_df("data_sapi", cols)
     
@@ -225,7 +224,6 @@ def load_data():
         df = df.drop(columns=["Umur Sapi"])
     if "Kode Sapi" not in df.columns: df["Kode Sapi"] = "-"
     
-    # Fungsi pengaman: Jika database cloud lama belum punya kolom RFID/Tag Asal, isi dengan strip (-) otomatis
     if "RFID/Tag Asal" not in df.columns: df["RFID/Tag Asal"] = "-"
         
     if "Jenis Kelamin" not in df.columns: df["Jenis Kelamin"] = "Jantan"
@@ -236,7 +234,6 @@ def load_data():
     return df.reindex(columns=cols)
 
 def save_data(df):
-    # Menyisipkan "RFID/Tag Asal" tepat di urutan ke-2 setelah "Kode Sapi" agar tidak terpotong saat fungsi simpan dipanggil
     cols = ["Kode Sapi", "RFID/Tag Asal", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Umur Masuk (Bulan)", "Asal Negara", "Tgl Masuk", "Bobot Awal (kg)", "Tgl Cek Akhir", "Bobot Akhir (kg)", "ADG (kg/hari)", "Total Pakan (kg)", "Tgl Pakan Terakhir", "Lokasi Pen"]
     write_df_to_sheet("data_sapi", df, cols)
 
@@ -322,7 +319,7 @@ else:
     user_name = st.session_state["username"]
     daftar_menu_user = st.session_state.get("allowed_menus", [ALL_MENUS[0]])
 
-    # 1. RENDER STRUKTUR STRUKTUR HALAMAN UTAMA TERLEBIH DAHULU (Agar Spinner punya jangkar visual)
+    # 1. RENDER STRUKTUR STRUKTUR HALAMAN UTAMA TERLEBIH DAHULU
     st.title("🐂 Sistem Monitoring Penggemukan Sapi Impor & Lokal")
     
     # SIDEBAR PANEL CONTROL
@@ -342,14 +339,12 @@ else:
     menu = st.sidebar.selectbox("PILIH MENU APLIKASI", daftar_menu_user)
 
     # 2. PROSES MEMUAT DATA DIKUMPULKAN DI SINI DI DALAM SATU SPINNER MAKRO UTAMA
-    # Menangani Load Data, Ganti Menu, dan Refresh Halaman Sekaligus
     with st.spinner("⏳ Menyelaraskan koneksi cloud... Sedang mengunduh seluruh database master kandang terbaru..."):
         df_sapi = load_data()
         df_panen = load_panen_data()
         df_truk = load_truk_data()
         LIST_JENIS_SAPI = load_jenis_sapi()
 
-    # Tampilkan status koneksi tepat di bawah judul setelah data ter-load sempurna
     if sheet:
         st.success("Aplikasi ini sekarang terhubung online dengan Google Sheets! 🚀")
     else:
@@ -367,8 +362,11 @@ else:
         tampilkan_menu_operator(load_users, ALL_MENUS, save_users, add_activity_log, user_name)
     elif menu == "🚛 Timbangan Armada Truk":
         tampilkan_menu_timbangan_truk(df_truk, save_truk_data, add_activity_log, user_name)
+    
+    # --- UTAMA: Mengirimkan parameter user_role untuk otorisasi Edit & Hapus ---
     elif menu == "➕ Registrasi Sapi Baru":
-        tampilkan_menu_registrasi(df_sapi, LIST_JENIS_SAPI, STRUKTUR_KANDANG, save_data, add_activity_log, user_name)
+        tampilkan_menu_registrasi(df_sapi, LIST_JENIS_SAPI, STRUKTUR_KANDANG, save_data, add_activity_log, user_name, user_role)
+        
     elif menu == "🍽️ Input Pakan Harian":
         tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log, user_name, read_sheet_to_df, write_df_to_sheet)
     elif menu == "⚖️ Input Timbangan Berkala":
