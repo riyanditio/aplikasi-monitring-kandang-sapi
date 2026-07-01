@@ -52,7 +52,6 @@ def tampilkan_menu_registrasi(df_sapi, list_jenis_sapi, struktur_kandang, save_d
                 lokasi_pen_final = f"{pilihan_blok} - {pilihan_pen}"
 
                 new_cow = {
-                    "Kode Tiba": kode_tiba,
                     "Kode Sapi": kode_tiba, 
                     "RFID/Tag Asal": rfid_tag_asal if rfid_tag_asal else "-",
                     "RFID/Tag": rfid_tag_kandang if rfid_tag_kandang else "-",
@@ -76,7 +75,7 @@ def tampilkan_menu_registrasi(df_sapi, list_jenis_sapi, struktur_kandang, save_d
                 st.success(f"🎉 Berhasil! Sapi dengan Kode Tiba {kode_tiba} telah terdaftar.")
                 st.rerun()
 
-    # ==================== TAB 2: EDIT / HAPUS (KOREKSI DULU BARU OTORISASI) ====================
+    # ==================== TAB 2: EDIT / HAPUS (FIXED KEYERROR) ====================
     with tab_edit_hapus:
         st.markdown("### ⚙️ Panel Koreksi Data Registrasi")
         
@@ -84,8 +83,8 @@ def tampilkan_menu_registrasi(df_sapi, list_jenis_sapi, struktur_kandang, save_d
             st.info("Belum ada data sapi aktif di database untuk diedit.")
             return
 
-        # Pilihan sapi selalu muncul langsung tanpa dihalangi password
-        opsi_sapi = df_sapi.apply(lambda r: f"No. {r.name + 1} | Kelompok: {r['Kode Tiba']} | RFID: {r['RFID/Tag']} | Pen: {r['Lokasi Pen']}", axis=1).tolist()
+        # Mengubah r['Kode Tiba'] menjadi r['Kode Sapi'] sesuai skema df_sapi di app.py
+        opsi_sapi = df_sapi.apply(lambda r: f"No. {r.name + 1} | Kelompok: {r['Kode Sapi']} | RFID: {r['RFID/Tag']} | Pen: {r['Lokasi Pen']}", axis=1).tolist()
         sapi_terpilih = st.selectbox("Pilih Sapi Yang Akan Di-Koreksi/Hapus:", opsi_sapi)
         
         idx_target = opsi_sapi.index(sapi_terpilih)
@@ -99,7 +98,7 @@ def tampilkan_menu_registrasi(df_sapi, list_jenis_sapi, struktur_kandang, save_d
             with st.form("form_edit_registrasi"):
                 col_e1, col_e2 = st.columns(2)
                 with col_e1:
-                    e_kode_tiba = st.text_input("Kode Tiba / No. Batch", value=str(row_sapi["Kode Tiba"])).strip()
+                    e_kode_tiba = st.text_input("Kode Tiba / No. Batch", value=str(row_sapi["Kode Sapi"])).strip()
                     e_rfid_asal = st.text_input("RFID / Tag Asal", value=str(row_sapi.get("RFID/Tag Asal", "-"))).strip()
                     e_rfid_kandang = st.text_input("RFID / Tag Kandang", value=str(row_sapi["RFID/Tag"])).strip()
                     e_jenis = st.selectbox("Jenis Sapi", list_jenis_sapi, index=list_jenis_sapi.index(row_sapi["Jenis Sapi"]) if row_sapi["Jenis Sapi"] in list_jenis_sapi else 0)
@@ -111,7 +110,6 @@ def tampilkan_menu_registrasi(df_sapi, list_jenis_sapi, struktur_kandang, save_d
 
                 st.markdown("---")
                 
-                # Input password dimasukkan di bagian bawah form (hanya muncul untuk operator)
                 password_edit = ""
                 if not is_admin:
                     password_edit = st.text_input("🔐 Operator wajib memasukkan Password Admin untuk menyimpan:", type="password", help="Minta bantuan admin untuk memasukkan password konfirmasi")
@@ -119,12 +117,10 @@ def tampilkan_menu_registrasi(df_sapi, list_jenis_sapi, struktur_kandang, save_d
                 btn_simpan_edit = st.form_submit_button("Simpan Perubahan Data", type="primary", use_container_width=True)
                 
                 if btn_simpan_edit:
-                    # Validasi password di akhir klik tombol
                     if not is_admin and password_edit != "admin123":
                         st.error("❌ Gagal Simpan! Password Admin salah atau belum diisi.")
                     else:
-                        df_sapi.at[idx_target, "Kode Tiba"] = e_kode_tiba
-                        df_sapi.at[idx_target, "Kode Sapi"] = e_kode_tiba  # Menjaga sinkronisasi
+                        df_sapi.at[idx_target, "Kode Sapi"] = e_kode_tiba
                         df_sapi.at[idx_target, "RFID/Tag Asal"] = e_rfid_asal
                         df_sapi.at[idx_target, "RFID/Tag"] = e_rfid_kandang
                         df_sapi.at[idx_target, "Jenis Sapi"] = e_jenis
@@ -140,21 +136,19 @@ def tampilkan_menu_registrasi(df_sapi, list_jenis_sapi, struktur_kandang, save_d
 
         # --- SUB-TAB: HAPUS DATA ---
         with sub_tab_hapus:
-            st.markdown(f"🚨 **Perhatian:** Tindakan ini akan menghapus data sapi kelompok **{row_sapi['Kode Tiba']}** pada baris ke-{idx_target + 1} secara permanen.")
+            st.markdown(f"🚨 **Perhatian:** Tindakan ini akan menghapus data sapi kelompok **{row_sapi['Kode Sapi']}** pada baris ke-{idx_target + 1} secara permanen.")
             konfirmasi_hapus = st.checkbox("Saya benar-benar ingin menghapus data sapi ini.")
             
-            # Input password hapus ditaruh setelah checkbox dicentang (hanya untuk operator)
             password_hapus = ""
             if not is_admin and konfirmasi_hapus:
                 password_hapus = st.text_input("🔐 Operator wajib memasukkan Password Admin untuk menghapus:", type="password", key="pwd_hapus")
 
             if st.button("🗑️ Hapus Sapi Secara Permanen", type="primary", disabled=not konfirmasi_hapus, use_container_width=True):
-                # Validasi password di akhir klik tombol hapus
                 if not is_admin and password_hapus != "admin123":
                     st.error("❌ Gagal Hapus! Password Admin salah atau belum diisi.")
                 else:
                     df_sapi = df_sapi.drop(index=idx_target).reset_index(drop=True)
                     save_data(df_sapi)
-                    add_activity_log(user_name, "Hapus Registrasi", f"Menghapus sapi baris {idx_target + 1} dari Kelompok {row_sapi['Kode Tiba']}")
+                    add_activity_log(user_name, "Hapus Registrasi", f"Menghapus sapi baris {idx_target + 1} dari Kelompok {row_sapi['Kode Sapi']}")
                     st.success("💥 Data berhasil dihapus dari database!")
                     st.rerun()
