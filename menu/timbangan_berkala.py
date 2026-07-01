@@ -12,7 +12,6 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
 
     TARGET_ADG = 1.6
 
-    # Rekonstruksi otomatis filter berdasarkan data pen unik yang eksis di database
     list_lokasi_eksis = df_sapi["Lokasi Pen"].unique()
     grid_filter = {}
     for item in list_lokasi_eksis:
@@ -33,30 +32,25 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
     with cf2:
         filter_pen = st.selectbox("Pilih Nomor/Bagian Pen Sapi:", list(set(grid_filter[filter_blok])))
 
-    # Gabung kembali string filter pencarian
     lokasi_pencarian = f"{filter_blok} - {filter_pen}" if filter_blok != "Format Lama" else filter_pen
-    
-    # Filter dataframe utama hanya menampilkan sapi di pen terpilih tersebut
     df_sapi_terfilter = df_sapi[df_sapi["Lokasi Pen"] == lokasi_pencarian]
 
     if df_sapi_terfilter.empty:
         st.info(f"ℹ️ Pen **{lokasi_pencarian}** saat ini sedang tidak diisi oleh sapi aktif.")
         return
 
-    # Pilihan Sapi di dalam Pen Tersebut
     opsi_sapi = df_sapi_terfilter.apply(lambda r: f"{r['Kode Sapi']} - RFID: {r['RFID/Tag']}", axis=1).tolist()
     sapi_pilihan = st.selectbox("Pilih Kode Sapi Yang Ditimbang:", opsi_sapi)
     
-    # Ambil index asli dari master dataframe
     kode_sapi_asli = sapi_pilihan.split(" - ")[0]
     idx_master = df_sapi[df_sapi["Kode Sapi"] == kode_sapi_asli].index[0]
     row_sapi = df_sapi.iloc[idx_master]
 
-    # Beri tahu operator status penimbangan saat ini
     is_penimbangan_pertama = (str(row_sapi['Tgl Cek Akhir']) == str(row_sapi['Tgl Masuk']))
     status_timbang_text = "🟢 PENIMBANGAN PERTAMA (Evaluasi Awal Masa Karantina)" if is_penimbangan_pertama else "🔵 PENIMBANGAN BERKALA / RUTIN"
 
-    st.info(f"📋 **Data Historis Sapi:** ({status_timbang_text})\n* Tanggal Masuk Area: {row_sapi['Tgl Masuk']} | Berat Awal: {row_sapi['Bobot Awal (kg)']} kg\n* Timbangan Terakhir: {row_sapi['Tgl Cek Akhir']} | Berat Akhir: {row_sapi['Bobot Akhir (kg)']} kg")
+    # --- INTEGRASI: Menampilkan RFID/Tag Asal di Kartu Informasi Historis Timbangan ---
+    st.info(f"📋 **Data Historis Sapi:** ({status_timbang_text})\n* Tanggal Masuk Area: {row_sapi['Tgl Masuk']} | Berat Awal: {row_sapi['Bobot Awal (kg)']} kg\n* RFID Asal: {row_sapi.get('RFID/Tag Asal', '-')} | RFID Baru: {row_sapi['RFID/Tag']}\n* Timbangan Terakhir: {row_sapi['Tgl Cek Akhir']} | Berat Akhir: {row_sapi['Bobot Akhir (kg)']} kg")
 
     st.markdown("---")
     with st.form("form_timbangan_berkala", clear_on_submit=True):
@@ -69,10 +63,8 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
         submit_timbang = st.form_submit_button("Simpan & Kalkulasi ADG Baru", type="primary", use_container_width=True)
 
         if submit_timbang:
-            # Hitung ADG otomatis memanfaatkan fungsi dari app.py
             adg_terbaru = float(calculate_adg(row_sapi["Tgl Masuk"], row_sapi["Bobot Awal (kg)"], tgl_timbang_sekarang.strftime("%Y-%m-%d"), bobot_timbang_baru))
             
-            # Update data ke master dataframe
             df_sapi.at[idx_master, "Tgl Cek Akhir"] = tgl_timbang_sekarang.strftime("%Y-%m-%d")
             df_sapi.at[idx_master, "Bobot Akhir (kg)"] = float(bobot_timbang_baru)
             df_sapi.at[idx_master, "ADG (kg/hari)"] = adg_terbaru
@@ -80,7 +72,6 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
             save_data(df_sapi)
             add_activity_log(user_name, "Timbangan Rutin", f"Menimbang Sapi {row_sapi['Kode Sapi']} di {row_sapi['Lokasi Pen']} dengan bobot {bobot_timbang_baru}kg (ADG Baru: {adg_terbaru} kg/hari)")
             
-            # Alarm peringatan real-time saat timbangan baru di-submit
             if adg_terbaru < TARGET_ADG:
                 st.error(f"⚠️ **ALARM PERFORMA RENDAH:** Sapi {row_sapi['Kode Sapi']} berhasil disimpan. ADG hasil timbangan berkala ini hanya mencapai `{adg_terbaru} kg/hari` (Di bawah target standar {TARGET_ADG} kg/hari). Direkomendasikan cek kesehatan/pakan.")
             else:

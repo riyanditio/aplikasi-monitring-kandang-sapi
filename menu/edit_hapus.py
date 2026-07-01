@@ -32,7 +32,9 @@ def tampilkan_menu_edit_hapus(df_sapi, list_jenis_sapi, daftar_pen, save_data, a
             col1, col2 = st.columns(2)
             with col1:
                 kode_baru = st.text_input("Kode Sapi / ID Anting", value=str(row["Kode Sapi"])).strip()
-                rfid_baru = st.text_input("RFID / Electronic Tag", value=str(row["RFID/Tag"])).strip()
+                # --- INTEGRASI: Input RFID/Tag Asal Baru ---
+                rfid_asal_baru = st.text_input("RFID / Tag Asal (Asli)", value=str(row.get("RFID/Tag Asal", "-"))).strip()
+                rfid_baru = st.text_input("RFID / Electronic Tag Baru", value=str(row["RFID/Tag"])).strip()
                 jenis_baru = st.selectbox("Jenis Sapi", list_jenis_sapi, index=list_jenis_sapi.index(row["Jenis Sapi"]) if row["Jenis Sapi"] in list_jenis_sapi else 0)
                 jk_baru = st.selectbox("Jenis Kelamin", ["Jantan", "Betina"], index=0 if row["Jenis Kelamin"] == "Jantan" else 1)
             
@@ -58,6 +60,8 @@ def tampilkan_menu_edit_hapus(df_sapi, list_jenis_sapi, daftar_pen, save_data, a
 
             if btn_update:
                 df_sapi.at[idx_sapi, "Kode Sapi"] = kode_baru
+                # --- INTEGRASI: Simpan perubahan nilai RFID/Tag Asal ---
+                df_sapi.at[idx_sapi, "RFID/Tag Asal"] = rfid_asal_baru
                 df_sapi.at[idx_sapi, "RFID/Tag"] = rfid_baru
                 df_sapi.at[idx_sapi, "Jenis Sapi"] = jenis_baru
                 df_sapi.at[idx_sapi, "Jenis Kelamin"] = jk_baru

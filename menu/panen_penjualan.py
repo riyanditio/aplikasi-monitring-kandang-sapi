@@ -1,16 +1,16 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime  # <-- WAJIB ADA untuk menghitung hari pemeliharaan
+from datetime import datetime
 
 def tampilkan_menu_panen_penjualan(df_sapi, df_panen, save_panen_data, save_data, add_activity_log, user_name):
     st.subheader("💰 Manajemen Panen & Penjualan Sapi")
-    tab_form_panen, tab_riwayat = st.tabs(["➕ Proses Panen Sapi", "📜 Riwayat Sapi Terjual/Panen"])
+    tab_form_panen, tab_riwayat = st.tabs(["📦 Proses Panen Sapi", "📜 Riwayat Sapi Terjual/Panen"])
     
     with tab_form_panen:
         if df_sapi.empty: 
             st.info("Tidak ada sapi aktif di kandang.")
         else:
-            st.write("### 📝 Form Pencatatan Keluar / Panen")
+            st.write("### 📋 Form Pencatatan Keluar / Panen")
             pilihan_sapi = df_sapi["RFID/Tag"].astype(str).tolist()
             selected_tag = st.selectbox("Pilih RFID Sapi yang Akan Dipanen:", options=pilihan_sapi)
             idx = df_sapi[df_sapi["RFID/Tag"].astype(str) == selected_tag].index[0]
@@ -25,9 +25,11 @@ def tampilkan_menu_panen_penjualan(df_sapi, df_panen, save_panen_data, save_data
             
             col_p1, col_p2 = st.columns(2)
             with col_p1:
+                # --- INTEGRASI: Penayangan RFID/Tag Asal di Summary Form Panen ---
                 st.info(f"""
 * **Kode Sapi:** {data_sapi.get('Kode Sapi', '-')}
-* **RFID/Tag:** {data_sapi['RFID/Tag']}
+* **RFID/Tag Asal:** {data_sapi.get('RFID/Tag Asal', '-')}
+* **RFID/Tag Baru:** {data_sapi['RFID/Tag']}
 * **Jenis Sapi:** {data_sapi['Jenis Sapi']}
 * **Lama Pelihara:** {hari_pelihara} Hari
 * **Bobot Awal Masuk:** {data_sapi['Bobot Awal (kg)']} kg

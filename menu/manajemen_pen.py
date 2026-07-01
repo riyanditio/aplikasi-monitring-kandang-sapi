@@ -34,10 +34,8 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
     with tab_status:
         st.markdown("### 🏬 Peta Distribusi Sapi Saat Ini")
         
-        # Iterasi untuk menampilkan data sapi dikelompokkan berdasarkan Blok Kandang
         sapi_terpetakan_idx = []
         for blok, pens in struktur_kandang.items():
-            # Cari sapi yang lokasi pen-nya berawalan nama Blok ini
             sapi_di_blok = df_sapi[df_sapi["Lokasi Pen"].str.startswith(blok, na=False)]
             total_sapi_blok = len(sapi_di_blok)
             sapi_terpetakan_idx.extend(sapi_di_blok.index.tolist())
@@ -52,36 +50,36 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
                         
                         if not sapi_di_pen.empty:
                             st.markdown(f"🔹 **{pen}** ({len(sapi_di_pen)} Ekor):")
-                            df_tampil = sapi_di_pen[["Kode Sapi", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Bobot Akhir (kg)", "Tgl Masuk"]].reset_index(drop=True)
+                            # --- INTEGRASI: Menampilkan RFID/Tag Asal di Dataframe Map Pen ---
+                            df_tampil = sapi_di_pen[["Kode Sapi", "RFID/Tag Asal", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Bobot Akhir (kg)", "Tgl Masuk"]].reset_index(drop=True)
                             st.dataframe(df_tampil, use_container_width=True)
                         else:
                             st.markdown(f"⚪ *{pen}* : (Kosong)")
 
         # ANTISIPASI DATA FORMAT LAMA (BACKWARD COMPATIBILITY)
-        # Jika ada sapi yang masih terdaftar di pen lama (seperti "Pen Karantina"), tampilkan di bawah ini
         sapi_format_lama = df_sapi.drop(index=sapi_terpetakan_idx, errors='ignore')
         if not sapi_format_lama.empty:
             st.markdown("---")
             with st.expander("⚠️ Data Pen Format Lama / Perlu Penyesuaian", expanded=True):
                 st.warning("Sapi di bawah ini terdeteksi masih menggunakan format pen lama. Segera lakukan mutasi pen ke struktur blok yang baru di Tab sebelah.")
-                st.dataframe(sapi_format_lama[["Kode Sapi", "RFID/Tag", "Jenis Sapi", "Lokasi Pen", "Bobot Akhir (kg)"]].reset_index(drop=True), use_container_width=True)
+                # --- INTEGRASI: Menampilkan RFID/Tag Asal di Format Lama ---
+                st.dataframe(sapi_format_lama[["Kode Sapi", "RFID/Tag Asal", "RFID/Tag", "Jenis Sapi", "Lokasi Pen", "Bobot Akhir (kg)"]].reset_index(drop=True), use_container_width=True)
 
     # ==================== TAB 2: EKSEKUSI MUTASI PEN ====================
     with tab_mutasi:
         st.markdown("### 🔄 Form Pemindahan (Mutasi) Pen Sapi")
         
-        # 1. Komponen Memilih Sapi Sasaran
         opsi_sapi = df_sapi.apply(lambda r: f"{r['Kode Sapi']} - {r['RFID/Tag']} (Sekarang di: {r['Lokasi Pen']})", axis=1).tolist()
         sapi_terpilih = st.selectbox("Pilih Sapi Yang Akan Dimutasi:", opsi_sapi)
         
         idx_sapi = opsi_sapi.index(sapi_terpilih)
         sapi_row = df_sapi.iloc[idx_sapi]
         
-        st.info(f"📋 **Detail Sapi Terpilih:**\n* Kode Sapi: {sapi_row['Kode Sapi']} | RFID: {sapi_row['RFID/Tag']}\n* Jenis: {sapi_row['Jenis Sapi']} | Bobot Terakhir: {sapi_row['Bobot Akhir (kg)']} kg\n* Lokasi Sekarang: **{sapi_row['Lokasi Pen']}**")
+        # --- INTEGRASI: Tampilkan info RFID/Tag Asal di lembar info mutasi ---
+        st.info(f"📋 **Detail Sapi Terpilih:**\n* Kode Sapi: {sapi_row['Kode Sapi']} | RFID Asal: {sapi_row.get('RFID/Tag Asal', '-')}\n* RFID Baru: {sapi_row['RFID/Tag']} | Jenis: {sapi_row['Jenis Sapi']} | Bobot Terakhir: {sapi_row['Bobot Akhir (kg)']} kg\n* Lokasi Sekarang: **{sapi_row['Lokasi Pen']}**")
         
         st.markdown("#### 🎯 Tentukan Tujuan Perpindahan Baru")
         
-        # 2. Dropdown Bertingkat (Blok Kandang -> Pen Tujuan)
         col_m1, col_m2 = st.columns(2)
         with col_m1:
             pilihan_blok_tujuan = st.selectbox("Pilih Blok Kandang Tujuan:", list(struktur_kandang.keys()))
@@ -90,7 +88,6 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
             
         full_lokasi_tujuan = f"{pilihan_blok_tujuan} - {pilihan_pen_tujuan}"
         
-        # Validasi cegah mutasi ke pen yang sama
         if full_lokasi_tujuan == sapi_row["Lokasi Pen"]:
             st.warning(f"⚠️ Sapi saat ini sudah berada di {full_lokasi_tujuan}. Silakan ganti lokasi tujuan yang berbeda.")
             tombol_siap = False
@@ -100,12 +97,10 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
         if st.button("🚀 Eksekusi Pemindahan Sapi", type="primary", use_container_width=True, disabled=not tombol_siap):
             lokasi_asal = sapi_row["Lokasi Pen"]
             
-            # Eksekusi pembaruan lokasi pen di dataframe master sapi
             df_sapi.at[idx_sapi, "Lokasi Pen"] = full_lokasi_tujuan
             save_data(df_sapi)
             
-            # Catat riwayat audit ke log aktivitas
-            detail_aksi = f"Memindahkan Sapi Kode {sapi_row['Kode Sapi']} ({sapi_row['RFID/Tag']}) dari [{lokasi_asal}] ke [{full_lokasi_tujuan}]"
+            detail_aksi = f"Memindahkan Sapi Kode {sapi_row['Kode Sapi']} (RFID Baru: {sapi_row['RFID/Tag']} | RFID Asal: {sapi_row.get('RFID/Tag Asal', '-')}) dari [{lokasi_asal}] ke [{full_lokasi_tujuan}]"
             add_activity_log(user_name, "Mutasi Kandang", detail_aksi)
             
             st.success(f"🎉 Sukses! Sapi {sapi_row['Kode Sapi']} berhasil dipindahkan menuju **{full_lokasi_tujuan}**.")
