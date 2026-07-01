@@ -78,7 +78,7 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
         if submit_timbang:
             adg_terbaru = float(calculate_adg(row_sapi["Tgl Masuk"], row_sapi["Bobot Awal (kg)"], tgl_timbang_sekarang.strftime("%Y-%m-%d"), bobot_timbang_baru))
             
-            # FIX ABSOLUT: Gunakan penargetan Boolean Masking (.loc[mask]) agar update kolom langsung menyasar sel data yang tepat
+            # FIX ABSOLUT: Gunakan penargetan Boolean Masking (.loc[mask]) agar update kolom langsung menyasar posisi fisik sel data yang tepat
             mask = (df_sapi["Kode Sapi"] == kode_sapi_asli) & (df_sapi["RFID/Tag"] == rfid_sapi_asli)
             df_sapi.loc[mask, "Tgl Cek Akhir"] = tgl_timbang_sekarang.strftime("%Y-%m-%d")
             df_sapi.loc[mask, "Bobot Akhir (kg)"] = float(bobot_timbang_baru)
