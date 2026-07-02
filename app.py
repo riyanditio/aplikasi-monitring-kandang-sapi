@@ -17,6 +17,7 @@ from menu.manajemen_operator import tampilkan_menu_operator
 from menu.master_jenis_sapi import tampilkan_menu_jenis_sapi
 from menu.manajemen_pen import tampilkan_menu_pen_mutasi
 from menu.dashboard import tampilkan_dashboard
+from menu.manajemen_kelompok import tampilkan_menu_manajemen_kelompok
 
 # --- 1. set_page_config HARUS DI PALING ATAS ---
 st.set_page_config(page_title="Sistem Penggemukan Sapi", layout="wide")
@@ -119,7 +120,7 @@ for blok, daftar_pen_di_blok in STRUKTUR_KANDANG.items():
         DAFTAR_PEN.append(f"{blok} - {pen}")
 
 DEFAULT_JENIS_SAPI = ["Brahman Cross", "Simental", "Limosin", "Hereford", "Sapi Lokal (Bali)", "Sapi Lokal (Madura)", "Sapi Lokal (PO/Peranakan Ongole)", "Ex Impor"]
-ALL_MENUS = ["📊 Dashboard & Tabel Monitor", "🏠 Manajemen Pen & Mutasi Sapi", "🐂 Kelola Master Jenis Sapi", "👥 Manajemen Akun Operator", "🚛 Timbangan Armada Truk", "➕ Registrasi Sapi Baru", "🍽️ Input Pakan Harian", "⚖️ Input Timbangan Berkala", "📈 Analisis & Grafik Performa", "💰 Manajemen Panen & Penjualan", "⚙️ Edit & Hapus Data", "📜 Log Aktivitas Operator"]
+ALL_MENUS = ["📊 Dashboard & Tabel Monitor", "🏠 Manajemen Pen & Mutasi Sapi", "👥 Manajemen Kelompok", "🐂 Kelola Master Jenis Sapi", "👥 Manajemen Akun Operator", "🚛 Timbangan Armada Truk", "➕ Registrasi Sapi Baru", "🍽️ Input Pakan Harian", "⚖️ Input Timbangan Berkala", "📈 Analisis & Grafik Performa", "💰 Manajemen Panen & Penjualan", "⚙️ Edit & Hapus Data", "📜 Log Aktivitas Operator"]
 
 # --- FUNGSI MENCATAT LOG RIWAYAT AKTIVITAS ---
 def add_activity_log(operator, aktivitas, detail):
@@ -171,6 +172,11 @@ def load_users():
         if "🚛 Timbangan Armada Truk" not in current_menus:
             current_menus.append("🚛 Timbangan Armada Truk")
             row_updated = True
+            
+        if "👥 Manajemen Kelompok" not in current_menus and row["Role"] == "Admin":
+            current_menus.append("👥 Manajemen Kelompok")
+            row_updated = True
+
         if "📜 Log Aktivitas Operator" not in current_menus and row["Role"] == "Admin":
             current_menus.append("📜 Log Aktivitas Operator")
             row_updated = True
@@ -366,7 +372,15 @@ else:
     # --- UTAMA: Mengirimkan parameter user_role untuk otorisasi Edit & Hapus ---
     elif menu == "➕ Registrasi Sapi Baru":
         tampilkan_menu_registrasi(df_sapi, LIST_JENIS_SAPI, STRUKTUR_KANDANG, save_data, add_activity_log, user_name, user_role)
-        
+    elif menu == "👥 Manajemen Kelompok":
+        tampilkan_menu_manajemen_kelompok(
+            df_sapi=df_sapi, 
+            DAFTAR_PEN=DAFTAR_PEN, 
+            user_role=user_role, 
+            save_data=save_data, 
+            add_activity_log=add_activity_log, 
+            user_name=user_name
+        )      
     elif menu == "🍽️ Input Pakan Harian":
         tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log, user_name, read_sheet_to_df, write_df_to_sheet)
     elif menu == "⚖️ Input Timbangan Berkala":
