@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta, timezone
 
-def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, calculate_adg, save_data, add_activity_log, user_name):
+def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, calculate_adg, save_data, add_activity_log, user_name, read_sheet_to_df, write_df_to_sheet):
     st.subheader("🏠 Manajemen Blok Kandang & Mutasi Pen Sapi")
     st.markdown("Kelola perpindahan lokasi sapi antar Blok Kandang dan Pen secara terstruktur sesuai fase pemeliharaan.")
 
@@ -24,11 +24,21 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
             struktur_kandang[blok].append(pen)
         else:
             if "Lainnya" not in struktur_kandang:
-                struktur_kandang["Lainnya"] = []  # FIX TYPO VS CODE: shortcut_kandang diganti menjadi struktur_kandang
+                struktur_kandang["Lainnya"] = []
             struktur_kandang["Lainnya"].append(item)
 
-    # Pemisahan Halaman Menjadi 2 Tab Utama
-    tab_status, tab_mutasi = st.tabs(["📊 Sebaran Populasi per Blok & Pen", "🔄 Jalankan Mutasi Sapi"])
+    # Otorisasi Tabs Berdasarkan Role User
+    if user_role == "Admin":
+        tab_status, tab_mutasi, tab_pengaturan = st.tabs([
+            "📊 Sebaran Populasi per Blok & Pen", 
+            "🔄 Jalankan Mutasi Sapi", 
+            "🛠️ Kelola Blok & Pen Baru"
+        ])
+    else:
+        tab_status, tab_mutasi = st.tabs([
+            "📊 Sebaran Populasi per Blok & Pen", 
+            "🔄 Jalankan Mutasi Sapi"
+        ])
 
     # ==================== TAB 1: SEBARAN POPULASI ====================
     with tab_status:
@@ -39,7 +49,7 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
             sapi_di_blok = df_sapi[df_sapi["Lokasi Pen"].str.startswith(blok, na=False)]
             total_sapi_blok = len(sapi_di_blok)
             sapi_terpetakan_idx.extend(sapi_di_blok.index.tolist())
-            
+             
             with st.expander(f"📂 {blok.upper()} (Total: {total_sapi_blok} Ekor)", expanded=True):
                 if total_sapi_blok == 0:
                     st.caption("ℹ️ Blok kandang ini masih kosong.")
@@ -50,19 +60,16 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
                         
                         if not sapi_di_pen.empty:
                             st.markdown(f"🔹 **{pen}** ({len(sapi_di_pen)} Ekor):")
-                            # --- INTEGRASI: Menampilkan RFID/Tag Asal di Dataframe Map Pen ---
                             df_tampil = sapi_di_pen[["Kode Sapi", "RFID/Tag Asal", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Bobot Akhir (kg)", "Tgl Masuk"]].reset_index(drop=True)
                             st.dataframe(df_tampil, use_container_width=True)
                         else:
                             st.markdown(f"⚪ *{pen}* : (Kosong)")
 
-        # ANTISIPASI DATA FORMAT LAMA (BACKWARD COMPATIBILITY)
         sapi_format_lama = df_sapi.drop(index=sapi_terpetakan_idx, errors='ignore')
         if not sapi_format_lama.empty:
             st.markdown("---")
             with st.expander("⚠️ Data Pen Format Lama / Perlu Penyesuaian", expanded=True):
-                st.warning("Sapi di bawah ini terdeteksi masih menggunakan format pen lama. Segera lakukan mutasi pen ke struktur blok yang baru di Tab sebelah.")
-                # --- INTEGRASI: Menampilkan RFID/Tag Asal di Format Lama ---
+                st.warning("Sapi di bawah ini terdeteksi masih menggunakan format pen lama. Segera lakukan mutasi pen ke struktur blok yang baru.")
                 st.dataframe(sapi_format_lama[["Kode Sapi", "RFID/Tag Asal", "RFID/Tag", "Jenis Sapi", "Lokasi Pen", "Bobot Akhir (kg)"]].reset_index(drop=True), use_container_width=True)
 
     # ==================== TAB 2: EKSEKUSI MUTASI PEN ====================
@@ -70,21 +77,22 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
         st.markdown("### 🔄 Form Pemindahan (Mutasi) Pen Sapi")
         
         opsi_sapi = df_sapi.apply(lambda r: f"{r['Kode Sapi']} - {r['RFID/Tag']} (Sekarang di: {r['Lokasi Pen']})", axis=1).tolist()
+        if not opsi_sapi:
+            st.info("Tidak ada data sapi untuk dimutasi.")
+            return
+            
         sapi_terpilih = st.selectbox("Pilih Sapi Yang Akan Dimutasi:", opsi_sapi)
         
-        # FIX JAMINAN SINKRON: Pecah string opsi untuk mengambil Kode Sapi DAN RFID secara spesifik
         bagian_depan = sapi_terpilih.split(" (Sekarang di:")[0]
         kode_sapi_asli = bagian_depan.split(" - ")[0]
         rfid_sapi_asli = bagian_depan.split(" - ")[1]
         
-        # FIX ABSOLUT: Proteksi baris data menggunakan kombinasi .iloc[0] agar tidak salah sasaran karena bug indeks duplikat
         matched_rows = df_sapi[(df_sapi["Kode Sapi"] == kode_sapi_asli) & (df_sapi["RFID/Tag"] == rfid_sapi_asli)]
         if matched_rows.empty:
             st.error("⚠️ Data sapi tidak ditemukan di database master.")
             return
+            
         sapi_row = matched_rows.iloc[0]
-        
-        # --- INTEGRASI: Tampilkan info RFID/Tag Asal di lembar info mutasi ---
         st.info(f"📋 **Detail Sapi Terpilih:**\n* Kode Sapi: {sapi_row['Kode Sapi']} | RFID Asal: {sapi_row.get('RFID/Tag Asal', '-')}\n* RFID Baru: {sapi_row['RFID/Tag']} | Jenis: {sapi_row['Jenis Sapi']} | Bobot Terakhir: {sapi_row['Bobot Akhir (kg)']} kg\n* Lokasi Sekarang: **{sapi_row['Lokasi Pen']}**")
         
         st.markdown("#### 🎯 Tentukan Tujuan Perpindahan Baru")
@@ -106,7 +114,6 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
         if st.button("🚀 Eksekusi Pemindahan Sapi", type="primary", use_container_width=True, disabled=not tombol_siap):
             lokasi_asal = sapi_row["Lokasi Pen"]
             
-            # FIX ABSOLUT: Gunakan Boolean Mask (.loc[mask]) untuk mengunci baris mutasi secara rigid dan akurat
             mask = (df_sapi["Kode Sapi"] == kode_sapi_asli) & (df_sapi["RFID/Tag"] == rfid_sapi_asli)
             df_sapi.loc[mask, "Lokasi Pen"] = full_lokasi_tujuan
             save_data(df_sapi)
@@ -116,3 +123,58 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
             
             st.success(f"🎉 Sukses! Sapi {sapi_row['Kode Sapi']} berhasil dipindahkan menuju **{full_lokasi_tujuan}**.")
             st.rerun()
+
+    # ==================== TAB 3: PENGATURAN BLOK & PEN (ADMIN ONLY) ====================
+    if user_role == "Admin":
+        with tab_pengaturan:
+            st.markdown("### 🛠️ Tambah Blok & Pen Kandang Baru")
+            
+            df_pen_db = read_sheet_to_df("master_pen", ["Blok", "Pen"])
+            blok_existing = sorted(df_pen_db["Blok"].dropna().unique().tolist()) if not df_pen_db.empty else []
+            opsi_blok = ["+ Buat Blok Baru Baru"] + blok_existing
+            
+            pilih_blok_input = st.selectbox("Pilih Opsi Kategori Blok Kandang:", opsi_blok)
+            
+            if pilih_blok_input == "+ Buat Blok Baru Baru":
+                nama_blok = st.text_input("Masukkan Nama Blok Baru Anda:", placeholder="Contoh: Blok Penggemukan D").strip()
+            else:
+                nama_blok = pilih_blok_input
+                
+            nama_pen = st.text_input("Masukkan Nama Pen Kandang Baru:", placeholder="Contoh: Pen D1").strip()
+            
+            if st.button("➕ Daftarkan Pen Baru Ke Google Sheets", type="primary"):
+                if not nama_blok or not nama_pen:
+                    st.error("⚠️ Nama Blok dan Nama Pen tidak diperbolehkan kosong!")
+                else:
+                    kombinasi_kembar = not df_pen_db[(df_pen_db["Blok"].str.lower() == nama_blok.lower()) & (df_pen_db["Pen"].str.lower() == nama_pen.lower())].empty
+                    if kombinasi_kembar:
+                        st.warning(f"⚠️ Pen '{nama_pen}' pada '{nama_blok}' sudah ada di database.")
+                    else:
+                        new_pen_row = pd.DataFrame([{"Blok": nama_blok, "Pen": nama_pen}])
+                        df_pen_db = pd.concat([df_pen_db, new_pen_row], ignore_index=True)
+                        write_df_to_sheet("master_pen", df_pen_db, ["Blok", "Pen"])
+                        
+                        add_activity_log(user_name, "Tambah Master Pen", f"Menambahkan Pen baru: {nama_blok} - {nama_pen}")
+                        st.success(f"🎉 Sukses menambahkan pen kandang: **{nama_blok} - {nama_pen}**")
+                        st.rerun()
+                        
+            st.markdown("---")
+            st.markdown("### 🗑️ Hapus Pen Kandang")
+            if not df_pen_db.empty:
+                list_hapus = df_pen_db.apply(lambda r: f"{r['Blok']} - {r['Pen']}", axis=1).tolist()
+                pen_dihapus = st.selectbox("Pilih Lokasi Pen yang Ingin Dihapus:", sorted(list_hapus))
+                
+                if st.button("🗑️ Hapus Pen Terpilih", type="secondary"):
+                    b_hapus, p_hapus = pen_dihapus.split(" - ", 1)
+                    
+                    # Proteksi: Pastikan tidak ada sapi aktif di pen yang mau dihapus
+                    sapi_di_pen = df_sapi[df_sapi["Lokasi Pen"] == pen_dihapus]
+                    if not sapi_di_pen.empty:
+                        st.error(f"❌ Tidak bisa menghapus! Masih ada {len(sapi_di_pen)} ekor sapi aktif di {pen_dihapus}. Silakan mutasi sapinya ke pen lain terlebih dahulu.")
+                    else:
+                        df_pen_db = df_pen_db[~((df_pen_db["Blok"] == b_hapus) & (df_pen_db["Pen"] == p_hapus))]
+                        write_df_to_sheet("master_pen", df_pen_db, ["Blok", "Pen"])
+                        
+                        add_activity_log(user_name, "Hapus Master Pen", f"Menghapus Pen: {pen_dihapus}")
+                        st.success(f"🗑️ Lokasi Pen **{pen_dihapus}** sukses dihapus dari database.")
+                        st.rerun()

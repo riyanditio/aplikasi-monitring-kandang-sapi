@@ -43,7 +43,6 @@ sheet = get_google_sheet()
 # --- FUNGSI PEMBANTU BACA & TULIS SPREADSHEET TABS ---
 def read_sheet_to_df(worksheet_name, default_cols):
     global sheet
-    # Spinner di sini dihapus agar tidak terjadi 'blinking' beruntun saat startup/refresh
     if not sheet:
         file_name = f"{worksheet_name}.csv"
         if os.path.exists(file_name): return pd.read_csv(file_name)
@@ -78,7 +77,6 @@ def read_sheet_to_df(worksheet_name, default_cols):
 
 def write_df_to_sheet(worksheet_name, df, default_cols):
     global sheet
-    # Spinner di sini dipertahankan untuk mendeteksi animasi "Simpan Data" di setiap menu form
     with st.spinner(f"💾 Sedang mengunggah dan mengamankan data {worksheet_name.replace('_', ' ')} ke Google Sheets..."):
         df = df.reindex(columns=default_cols).fillna("")
         df.to_csv(f"{worksheet_name}.csv", index=False)
@@ -106,21 +104,8 @@ def write_df_to_sheet(worksheet_name, df, default_cols):
                     st.error(f"❌ Gagal sinkronisasi data ke Google Sheets ({worksheet_name}). Data tetap aman tersimpan di komputer kandang.")
 
 # ==================== MASTER DATA KONFIGURASI APLIKASI ====================
-STRUKTUR_KANDANG = {
-    "Blok Karantina": ["Pen Karantina 1", "Pen Karantina 2", "Pen Karantina 3"],
-    "Blok Penggemukan A (Bobot < 350kg)": ["Pen A1", "Pen A2", "Pen A3"],
-    "Blok Penggemukan B (Bobot 350-450kg)": ["Pen B1", "Pen B2", "Pen B3"],
-    "Blok Penggemukan C (Bobot > 450kg)": ["Pen C1", "Pen C2", "Pen C3"],
-    "Blok Isolasi & Perawatan (Sakit)": ["Pen Isolasi 1", "Pen Isolasi 2"]
-}
-
-DAFTAR_PEN = []
-for blok, daftar_pen_di_blok in STRUKTUR_KANDANG.items():
-    for pen in daftar_pen_di_blok:
-        DAFTAR_PEN.append(f"{blok} - {pen}")
-
-DEFAULT_JENIS_SAPI = ["Brahman Cross", "Simental", "Limosin", "Hereford", "Sapi Lokal (Bali)", "Sapi Lokal (Madura)", "Sapi Lokal (PO/Peranakan Ongole)", "Ex Impor"]
 ALL_MENUS = ["📊 Dashboard & Tabel Monitor", "🏠 Manajemen Pen & Mutasi Sapi", "👥 Manajemen Kelompok", "🐂 Kelola Master Jenis Sapi", "👥 Manajemen Akun Operator", "🚛 Timbangan Armada Truk", "➕ Registrasi Sapi Baru", "🍽️ Input Pakan Harian", "⚖️ Input Timbangan Berkala", "📈 Analisis & Grafik Performa", "💰 Manajemen Panen & Penjualan", "⚙️ Edit & Hapus Data", "📜 Log Aktivitas Operator"]
+DEFAULT_JENIS_SAPI = ["Brahman Cross", "Simental", "Limosin", "Hereford", "Sapi Lokal (Bali)", "Sapi Lokal (Madura)", "Sapi Lokal (PO/Peranakan Ongole)", "Ex Impor"]
 
 # --- FUNGSI MENCATAT LOG RIWAYAT AKTIVITAS ---
 def add_activity_log(operator, aktivitas, detail):
@@ -218,7 +203,29 @@ def save_jenis_sapi(list_jenis):
     df = pd.DataFrame({"Jenis Sapi": list_jenis})
     write_df_to_sheet("jenis_sapi", df, cols)
 
-# --- PENYESUAIAN SKEMA DATA MASTER SAPI (INTEGRASI KOLOM RFID/TAG ASAL) ---
+# --- FUNGSI MEMUAT DATA STRUKTUR BLOK & PEN SECARA DINAMIS ---
+def load_master_pen():
+    cols = ["Blok", "Pen"]
+    df = read_sheet_to_df("master_pen", cols)
+    if df.empty:
+        # Sediakan template bawaan awal jika database kosong pertama kali
+        default_kandang = [
+            {"Blok": "Blok Karantina", "Pen": "Pen Karantina 1"},
+            {"Blok": "Blok Karantina", "Pen": "Pen Karantina 2"},
+            {"Blok": "Blok Karantina", "Pen": "Pen Karantina 3"},
+            {"Blok": "Blok Penggemukan A (Bobot < 350kg)", "Pen": "Pen A1"},
+            {"Blok": "Blok Penggemukan A (Bobot < 350kg)", "Pen": "Pen A2"},
+            {"Blok": "Blok Penggemukan B (Bobot 350-450kg)", "Pen": "Pen B1"},
+            {"Blok": "Blok Penggemukan B (Bobot 350-450kg)", "Pen": "Pen B2"},
+            {"Blok": "Blok Penggemukan C (Bobot > 450kg)", "Pen": "Pen C1"},
+            {"Blok": "Blok Penggemukan C (Bobot > 450kg)", "Pen": "Pen C2"},
+            {"Blok": "Blok Isolasi & Perawatan (Sakit)", "Pen": "Pen Isolasi 1"}
+        ]
+        df = pd.DataFrame(default_kandang)
+        write_df_to_sheet("master_pen", df, cols)
+    return df
+
+# --- PENYESUAIAN SKEMA DATA MASTER SAPI ---
 def load_data():
     cols = ["Kode Sapi", "RFID/Tag Asal", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Umur Masuk (Bulan)", "Asal Negara", "Tgl Masuk", "Bobot Awal (kg)", "Tgl Cek Akhir", "Bobot Akhir (kg)", "ADG (kg/hari)", "Total Pakan (kg)", "Tgl Pakan Terakhir", "Lokasi Pen"]
     df = read_sheet_to_df("data_sapi", cols)
@@ -325,10 +332,8 @@ else:
     user_name = st.session_state["username"]
     daftar_menu_user = st.session_state.get("allowed_menus", [ALL_MENUS[0]])
 
-    # 1. RENDER STRUKTUR STRUKTUR HALAMAN UTAMA TERLEBIH DAHULU
     st.title("🐂 Sistem Monitoring Penggemukan Sapi Impor & Lokal")
     
-    # SIDEBAR PANEL CONTROL
     st.sidebar.markdown("### 👤 Pengguna Aktif")
     st.sidebar.info(f"**User:** {user_name.upper()}\n\n**Hak Akses:** {user_role}")
     
@@ -344,12 +349,29 @@ else:
     st.sidebar.markdown("---")
     menu = st.sidebar.selectbox("PILIH MENU APLIKASI", daftar_menu_user)
 
-    # 2. PROSES MEMUAT DATA DIKUMPULKAN DI SINI DI DALAM SATU SPINNER MAKRO UTAMA
+    # 2. PROSES REKONSTRUKSI DATA STRUKTUR SECARA LIVE DARI GOOGLE SHEETS
     with st.spinner("⏳ Menyelaraskan koneksi cloud... Sedang mengunduh seluruh database master kandang terbaru..."):
         df_sapi = load_data()
         df_panen = load_panen_data()
         df_truk = load_truk_data()
         LIST_JENIS_SAPI = load_jenis_sapi()
+        
+        # Ekstraksi Struktur Kandang Dinamis
+        df_pen_master = load_master_pen()
+        STRUKTUR_KANDANG = {}
+        DAFTAR_PEN = []
+        for _, row in df_pen_master.iterrows():
+            b = str(row["Blok"]).strip()
+            p = str(row["Pen"]).strip()
+            if b and p:
+                if b not in STRUKTUR_KANDANG:
+                    STRUKTUR_KANDANG[b] = []
+                if p not in STRUKTUR_KANDANG[b]:
+                    STRUKTUR_KANDANG[b].append(p)
+                
+                full_pen = f"{b} - {p}"
+                if full_pen not in DAFTAR_PEN:
+                    DAFTAR_PEN.append(full_pen)
 
     if sheet:
         st.success("Aplikasi ini sekarang terhubung online dengan Google Sheets! 🚀")
@@ -361,15 +383,14 @@ else:
     if menu == "📊 Dashboard & Tabel Monitor":
         tampilkan_dashboard(df_sapi)
     elif menu == "🏠 Manajemen Pen & Mutasi Sapi":
-        tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, calculate_adg, save_data, add_activity_log, user_name)
+        # DI SINI FIX UTAMA: Ditambahkan pemanggilan pembaca dan penulis sheet ke sub-menu
+        tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, calculate_adg, save_data, add_activity_log, user_name, read_sheet_to_df, write_df_to_sheet)
     elif menu == "🐂 Kelola Master Jenis Sapi":
         tampilkan_menu_jenis_sapi(LIST_JENIS_SAPI, save_jenis_sapi, add_activity_log, user_name)
     elif menu == "👥 Manajemen Akun Operator":
         tampilkan_menu_operator(load_users, ALL_MENUS, save_users, add_activity_log, user_name)
     elif menu == "🚛 Timbangan Armada Truk":
         tampilkan_menu_timbangan_truk(df_truk, save_truk_data, add_activity_log, user_name)
-    
-    # --- UTAMA: Mengirimkan parameter user_role untuk otorisasi Edit & Hapus ---
     elif menu == "➕ Registrasi Sapi Baru":
         tampilkan_menu_registrasi(df_sapi, LIST_JENIS_SAPI, STRUKTUR_KANDANG, save_data, add_activity_log, user_name, user_role)
     elif menu == "👥 Manajemen Kelompok":
