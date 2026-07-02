@@ -23,7 +23,7 @@ from menu.manajemen_kelompok import tampilkan_menu_manajemen_kelompok
 st.set_page_config(page_title="Sistem Penggemukan Sapi", layout="wide")
 
 # --- KONEKSI GOOGLE SHEETS MENGGUNAKAN GSPREAD (GLOBAL CACHED) ---
-@st.cache_resource
+@st.cache_resource(ttl=300)
 def get_google_sheet():
     try:
         scopes = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -172,7 +172,7 @@ def load_users():
         if "🚛 Timbangan Armada Truk" not in current_menus:
             current_menus.append("🚛 Timbangan Armada Truk")
             row_updated = True
-            
+
         if "👥 Manajemen Kelompok" not in current_menus and row["Role"] == "Admin":
             current_menus.append("👥 Manajemen Kelompok")
             row_updated = True
