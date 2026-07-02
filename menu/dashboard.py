@@ -50,7 +50,6 @@ def tampilkan_dashboard(df_sapi):
             df_underperform_view = df_underperform_view.rename(columns=rename_underperform)
             
             with st.expander("🔍 Lihat Daftar Sapi Performa Rendah"):
-                # FIX: Menghapus parameter width statis agar tabel auto-size sempurna
                 st.dataframe(
                     df_underperform_view[["Kode Tiba", "Jenis Sapi", "Lokasi Pen", "ADG (kg/hari)", "Tgl Cek Akhir"]].sort_values(by="ADG (kg/hari)"),
                     use_container_width=True,
@@ -89,48 +88,76 @@ def tampilkan_dashboard(df_sapi):
                 delta=f"{row_b['Adg_Blok']:.2f} kg/hari ADG" if row_b['Adg_Blok'] > 0 else None
             )
 
+    # ==================== FITUR BARU: NAVIGASI TAB & GRAFIK ANALISIS INDIKATOR ====================
     st.markdown("---")
-    st.markdown("### 📋 Tabel Monitor Seluruh Sapi di Area")
     
-    # ==================== PROSES ADAPTASI STRUKTUR TABEL BARU ====================
-    df_monitor = df_sapi.drop(columns=['Blok Kandang']).copy()
+    # Membuat 2 tab interaktif agar halaman rapi dan padat data
+    tab_grafik, tab_tabel = st.tabs(["📊 Grafik Analisis Performa", "📋 Tabel Monitor Seluruh Sapi"])
     
-    # 1. Ganti judul kolom Lama ke Baru
-    rename_main = {}
-    if "Kode Sapi" in df_monitor.columns:
-        rename_main["Kode Sapi"] = "Kode Tiba"
-    if "RFID/Tag" in df_monitor.columns:
-        rename_main["RFID/Tag"] = "RFID/Tag Kandang"
-    df_monitor = df_monitor.rename(columns=rename_main)
-    
-    # 2. Sisipkan Kolom 'RFID/Tag Asal' tepat setelah 'Kode Tiba'
-    if "RFID/Tag Asal" not in df_monitor.columns:
-        df_monitor["RFID/Tag Asal"] = "-"  # Penanda default strip sebelum database di-migrasi
+    with tab_grafik:
+        st.markdown("#### 🎯 Analisis Visual Populasi Kandang")
+        cg1, cg2 = st.columns(2)
         
-    cols_order = list(df_monitor.columns)
-    if "Kode Tiba" in cols_order and "RFID/Tag Asal" in cols_order:
-        cols_order.remove("RFID/Tag Asal")
-        idx_kode_tiba = cols_order.index("Kode Tiba")
-        cols_order.insert(idx_kode_tiba + 1, "RFID/Tag Asal")
-        df_monitor = df_monitor[cols_order]
+        with cg1:
+            st.markdown("**📈 Rata-rata Pertumbuhan (ADG) per Blok Kandang**")
+            # Menghitung rata-rata ADG kelompok data yang valid
+            df_chart_adg = df_sapi.groupby("Blok Kandang")["ADG (kg/hari)"].mean().reset_index()
+            df_chart_adg = df_chart_adg.set_index("Blok Kandang")
+            
+            # Menampilkan grafik batang vertikal bawaan streamlit
+            st.bar_chart(df_chart_adg["ADG (kg/hari)"], color="#2670e8", use_container_width=True)
+            st.caption("💡 *Gunakan grafik ini untuk melihat blok mana yang pertumbuhannya paling agresif atau tertinggal.*")
+            
+        with cg2:
+            st.markdown("**🐂 Distribusi Komposisi Jenis/Rumpun Sapi**")
+            # Menghitung total ekor per varietas sapi
+            df_chart_jenis = df_sapi["Jenis Sapi"].value_counts().reset_index()
+            df_chart_jenis.columns = ["Jenis Sapi", "Jumlah (Ekor)"]
+            df_chart_jenis = df_chart_jenis.set_index("Jenis Sapi")
+            
+            st.bar_chart(df_chart_jenis["Jumlah (Ekor)"], color="#ff9800", use_container_width=True)
+            st.caption("💡 *Representasi volume populasi berdasarkan varietas ras sapi yang masuk kandang.*")
 
-    # FIX: Seluruh batasan width kaku di bawah ini dihapus agar tabel melebar otomatis mengikuti layar
-    st.dataframe(
-        df_monitor, 
-        use_container_width=True, 
-        hide_index=True,
-        column_config={
-            "Kode Tiba": st.column_config.TextColumn("Kode Tiba"),
-            "RFID/Tag Asal": st.column_config.TextColumn("RFID/Tag Asal"),
-            "RFID/Tag Kandang": st.column_config.TextColumn("RFID/Tag Kandang"),
-            "Jenis Sapi": st.column_config.TextColumn("Jenis Sapi"),
-            "Lokasi Pen": st.column_config.TextColumn("Lokasi Pen"),
-            "Bobot Awal (kg)": st.column_config.NumberColumn("Bobot Awal (kg)", format="%d"),
-            "Bobot Akhir (kg)": st.column_config.NumberColumn("Bobot Akhir (kg)", format="%d"),
-            "ADG (kg/hari)": st.column_config.NumberColumn("ADG (kg/hari)", format="%.2f"),
-            "Total Pakan (kg)": st.column_config.NumberColumn("Total Pakan (kg)", format="%.2f"),
-            "Tgl Masuk": st.column_config.TextColumn("Tgl Masuk"),
-            "Tgl Cek Akhir": st.column_config.TextColumn("Tgl Cek Akhir"),
-            "Tgl Pakan Terakhir": st.column_config.TextColumn("Tgl Pakan Terakhir"),
-        }
-    )
+    with tab_tabel:
+        # ==================== PROSES ADAPTASI STRUKTUR TABEL UTAMA ====================
+        df_monitor = df_sapi.drop(columns=['Blok Kandang']).copy()
+        
+        # 1. Ganti judul kolom Lama ke Baru
+        rename_main = {}
+        if "Kode Sapi" in df_monitor.columns:
+            rename_main["Kode Sapi"] = "Kode Tiba"
+        if "RFID/Tag" in df_monitor.columns:
+            rename_main["RFID/Tag"] = "RFID/Tag Kandang"
+        df_monitor = df_monitor.rename(columns=rename_main)
+        
+        # 2. Sisipkan Kolom 'RFID/Tag Asal' tepat setelah 'Kode Tiba'
+        if "RFID/Tag Asal" not in df_monitor.columns:
+            df_monitor["RFID/Tag Asal"] = "-"
+            
+        cols_order = list(df_monitor.columns)
+        if "Kode Tiba" in cols_order and "RFID/Tag Asal" in cols_order:
+            cols_order.remove("RFID/Tag Asal")
+            idx_kode_tiba = cols_order.index("Kode Tiba")
+            cols_order.insert(idx_kode_tiba + 1, "RFID/Tag Asal")
+            df_monitor = df_monitor[cols_order]
+
+        # Tampilkan Tabel Utama
+        st.dataframe(
+            df_monitor, 
+            use_container_width=True, 
+            hide_index=True,
+            column_config={
+                "Kode Tiba": st.column_config.TextColumn("Kode Tiba"),
+                "RFID/Tag Asal": st.column_config.TextColumn("RFID/Tag Asal"),
+                "RFID/Tag Kandang": st.column_config.TextColumn("RFID/Tag Kandang"),
+                "Jenis Sapi": st.column_config.TextColumn("Jenis Sapi"),
+                "Lokasi Pen": st.column_config.TextColumn("Lokasi Pen"),
+                "Bobot Awal (kg)": st.column_config.NumberColumn("Bobot Awal (kg)", format="%d"),
+                "Bobot Akhir (kg)": st.column_config.NumberColumn("Bobot Akhir (kg)", format="%d"),
+                "ADG (kg/hari)": st.column_config.NumberColumn("ADG (kg/hari)", format="%.2f"),
+                "Total Pakan (kg)": st.column_config.NumberColumn("Total Pakan (kg)", format="%.2f"),
+                "Tgl Masuk": st.column_config.TextColumn("Tgl Masuk"),
+                "Tgl Cek Akhir": st.column_config.TextColumn("Tgl Cek Akhir"),
+                "Tgl Pakan Terakhir": st.column_config.TextColumn("Tgl Pakan Terakhir"),
+            }
+        )
