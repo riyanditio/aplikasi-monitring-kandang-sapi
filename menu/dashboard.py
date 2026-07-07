@@ -139,14 +139,43 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
                 st.write("*Belum ada riwayat timbangan berkala.*")
 
         with cl_hist2:
-            st.markdown("🍽️ **Riwayat Pemberian Pakan (Spesifik/Medis)**")
+            st.markdown("🍽️ **Riwayat Pemberian Pakan (Kombinasi)**")
             st.caption(f"*Total pakan terakumulasi selama di kandang: **{info_sapi['Total Pakan (kg)']:.2f} kg***")
+            
+            # Memuat data pakan dari Google Sheets
             df_r_pakan = read_sheet_to_df("pakan_harian", ["Tanggal", "Lokasi Pen", "Metode", "Target Spesifik", "Jenis Pakan", "Jumlah Pakan (kg)", "Operator"])
             
             target_id = f"{kode_cari} - {rfid_cari}"
-            df_r_pakan_spesifik = df_r_pakan[(df_r_pakan["Metode"] == "Spesifik") & (df_r_pakan["Target Spesifik"] == target_id)]
+            lokasi_sekarang = info_sapi["Lokasi Pen"]
             
-            if not df_r_pakan_spesifik.empty:
-                st.dataframe(df_r_pakan_spesifik[["Tanggal", "Jenis Pakan", "Jumlah Pakan (kg)"]].sort_values("Tanggal", ascending=False), use_container_width=True, hide_index=True, column_config={"Jumlah Pakan (kg)": st.column_config.NumberColumn(format="%.2f")})
+            # 1. Ambil riwayat pakan Metode "Spesifik"
+            df_spesifik = df_r_pakan[(df_r_pakan["Metode"] == "Spesifik") & (df_r_pakan["Target Spesifik"] == target_id)].copy()
+            
+            # 2. Ambil riwayat pakan Metode "Serentak" berdasarkan Pen sapi berada
+            df_serentak = df_r_pakan[(df_r_pakan["Metode"] == "Serentak") & (df_r_pakan["Lokasi Pen"] == lokasi_sekarang)].copy()
+            
+            # Kalkulasi pembagian pakan Serentak (Total Pakan / Jumlah Sapi di Pen)
+            jumlah_sapi_di_pen = len(df_sapi[df_sapi["Lokasi Pen"] == lokasi_sekarang])
+            if jumlah_sapi_di_pen > 0 and not df_serentak.empty:
+                df_serentak["Jumlah Pakan (kg)"] = pd.to_numeric(df_serentak["Jumlah Pakan (kg)"], errors='coerce').fillna(0)
+                df_serentak["Jumlah Pakan (kg)"] = (df_serentak["Jumlah Pakan (kg)"] / jumlah_sapi_di_pen).round(2)
+                # Ubah label agar operator tahu ini hasil pembagian rata
+                df_serentak["Metode"] = "Serentak (Dibagi Rata)"
+            
+            # 3. Gabungkan kedua riwayat dan urutkan dari yang terbaru
+            df_kombinasi_pakan = pd.concat([df_spesifik, df_serentak])
+            
+            if not df_kombinasi_pakan.empty:
+                df_kombinasi_pakan = df_kombinasi_pakan.sort_values("Tanggal", ascending=False)
+                
+                # Tampilkan tabel
+                st.dataframe(
+                    df_kombinasi_pakan[["Tanggal", "Metode", "Jenis Pakan", "Jumlah Pakan (kg)"]], 
+                    use_container_width=True, 
+                    hide_index=True,
+                    column_config={
+                        "Jumlah Pakan (kg)": st.column_config.NumberColumn("Konsumsi (kg)", format="%.2f")
+                    }
+                )
             else:
-                st.write("*Belum ada riwayat pakan yang diinput secara individu/spesifik untuk sapi ini. Sapi mendapatkan pakan serentak harian di pen.*")
+                st.write("*Belum ada riwayat pemberian pakan tercatat untuk sapi ini.*")

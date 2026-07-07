@@ -13,7 +13,7 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
     df_pakan = read_sheet_to_df("pakan_harian", COLS_PAKAN)
     
     # Membuat Tab Navigasi internal agar mempermudah operator
-    tab1, tab2 = st.tabs(["➕ Input Pakan Baru", "⚙️ Edit / Hapus Riwayat Pakan"])
+    tab1, tab2, tab3 = st.tabs(["➕ Input Pakan Baru", "⚙️ Edit / Hapus Riwayat Pakan", "📊 Rekapitulasi Realisasi Pakan"])
     
     # Jangkah daftar lengkap pen untuk kebutuhan dropdown Tab 2 (Edit)
     daftar_pen_lengkap = []
@@ -232,6 +232,46 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                     st.success(f"✅ Sukses! Data pakan No Urut {pilihan_no} berhasil diperbaiki.")
                     st.rerun()
 
+# ==================== TAB 3: REKAPITULASI PAKAN ====================
+    with tab3:
+        st.markdown("### 📊 Rekapitulasi & Realisasi Konsumsi Pakan")
+        
+        if df_pakan.empty:
+            st.info("Belum ada data riwayat pakan yang tercatat.")
+        else:
+            # 1. Hitung jumlah sapi per pen saat ini dari master data sapi
+            pen_counts = df_sapi["Lokasi Pen"].value_counts().to_dict()
+            
+            # 2. Siapkan data rekap pakan
+            df_rekap = df_pakan.copy()
+            df_rekap["Jumlah Pakan (kg)"] = pd.to_numeric(df_rekap["Jumlah Pakan (kg)"], errors="coerce").fillna(0)
+            
+            # 3. Kelompokkan berdasarkan Lokasi Pen dan Jenis Pakan
+            rekap_grup = df_rekap.groupby(["Lokasi Pen", "Jenis Pakan"])["Jumlah Pakan (kg)"].sum().reset_index()
+            
+            # 4. Tambahkan kalkulasi konsumsi per ekor
+            def hitung_per_ekor(row):
+                jml_sapi = pen_counts.get(row["Lokasi Pen"], 0)
+                if jml_sapi > 0:
+                    return round(row["Jumlah Pakan (kg)"] / jml_sapi, 2)
+                return 0.0
+            
+            rekap_grup["Jumlah Sapi di Pen"] = rekap_grup["Lokasi Pen"].map(lambda x: pen_counts.get(x, 0))
+            rekap_grup["Konsumsi Per Ekor (kg)"] = rekap_grup.apply(hitung_per_ekor, axis=1)
+            
+            # Ganti nama kolom agar enak dibaca di tabel
+            rekap_grup = rekap_grup.rename(columns={"Jumlah Pakan (kg)": "Total Pakan Disalurkan (kg)"})
+            
+            st.dataframe(
+                rekap_grup, 
+                use_container_width=True, 
+                hide_index=True,
+                column_config={
+                    "Total Pakan Disalurkan (kg)": st.column_config.NumberColumn(format="%.2f"),
+                    "Konsumsi Per Ekor (kg)": st.column_config.NumberColumn(format="%.2f")
+                }
+            )
+            
             # --- SELEKSI EKSEKUSI BUTTON HAPUS ---
             if btn_col2.button("🗑️ Hapus Data Permanen", type="secondary", use_container_width=True):
                 if pwd_input != correct_admin_pwd:
