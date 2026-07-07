@@ -5,14 +5,20 @@ from datetime import datetime
 def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log, user_name, read_sheet_to_df, write_df_to_sheet):
     st.subheader("🍽️ Manajemen Pakan Harian Sapi")
     
-    # Konfigurasi skema kolom untuk file tabel log pakan harian
-    # DITAMBAHKAN KOLOM: 'Metode' dan 'Target Spesifik'
-    COLS_PAKAN = ["Tanggal", "Lokasi Pen", "Metode", "Target Spesifik", "Jenis Pakan", "Jumlah Pakan (kg)", "Operator"]
+    # =========================================================================
+    # 🐛 FIX BUG TIPE DATA: Paksa kolom menjadi angka (float) agar bisa dihitung matematika
+    # =========================================================================
+    df_sapi["Total Pakan (kg)"] = pd.to_numeric(df_sapi["Total Pakan (kg)"], errors='coerce').fillna(0.0).astype(float)
     
-    # Muat log riwayat pakan harian dari Google Sheets / CSV
+    # Konfigurasi skema kolom untuk file tabel log pakan harian
+    COLS_PAKAN = ["Tanggal", "Lokasi Pen", "Metode", "Target Spesifik", "Jenis Pakan", "Jumlah Pakan (kg)", "Operator"]
     df_pakan = read_sheet_to_df("pakan_harian", COLS_PAKAN)
     
-    # Membuat Tab Navigasi internal agar mempermudah operator
+    # Paksa juga data log pakan menjadi angka mutlak
+    if not df_pakan.empty:
+        df_pakan["Jumlah Pakan (kg)"] = pd.to_numeric(df_pakan["Jumlah Pakan (kg)"], errors='coerce').fillna(0.0).astype(float)
+    
+    # Membuat 3 Tab Navigasi
     tab1, tab2, tab3 = st.tabs(["➕ Input Pakan Baru", "⚙️ Edit / Hapus Riwayat Pakan", "📊 Rekapitulasi Realisasi Pakan"])
     
     # Jangkah daftar lengkap pen untuk kebutuhan dropdown Tab 2 (Edit)
@@ -27,16 +33,15 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
         
         tgl_pakan = st.date_input("Tanggal Distribusi Pakan", datetime.now().date(), key="tgl_pakan_input")
         
-        # 1. Pilihan Blok Kandang
-        blok_terpilih = st.selectbox("1. Pilih Blok Kandang", list(STRUKTUR_KANDANG.keys()))
-        
-        # 2. Pilihan Pen (Otomatis tersaring berdasarkan Blok yang dipilih)
-        pen_tersaring = STRUKTUR_KANDANG[blok_terpilih]
-        pen_terpilih = st.selectbox("2. Pilih Pen Kandang", pen_tersaring)
-        
+        col_in1, col_in2 = st.columns(2)
+        with col_in1:
+            blok_terpilih = st.selectbox("1. Pilih Blok Kandang", list(STRUKTUR_KANDANG.keys()))
+        with col_in2:
+            pen_tersaring = STRUKTUR_KANDANG[blok_terpilih]
+            pen_terpilih = st.selectbox("2. Pilih Pen Kandang", pen_tersaring)
+            
         lokasi_pen_full = f"{blok_terpilih} - {pen_terpilih}"
         
-        # Cari populasi sapi aktif di pen tersebut secara real-time
         sapi_di_pen = df_sapi[df_sapi["Lokasi Pen"] == lokasi_pen_full]
         jumlah_sapi = len(sapi_di_pen)
         st.info(f"📊 Jumlah populasi sapi aktif saat ini di **{lokasi_pen_full}**: **{jumlah_sapi} Ekor**")
@@ -44,7 +49,6 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
         if jumlah_sapi == 0:
             st.warning("⚠️ Tidak bisa menginput pakan. Pen ini masih kosong.")
         else:
-            # 3. FITUR BARU: Metode Pemberian
             st.markdown("---")
             metode_pakan = st.radio(
                 "3. Pilih Metode Pemberian Pakan:",
@@ -53,27 +57,21 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
             )
 
             target_spesifik_val = "-"
-            opsi_sapi_spesifik = []
-
             if metode_pakan == "Spesifik (Per Ekor/Individu)":
-                # Ambil daftar sapi di pen tersebut untuk dipilih
                 opsi_sapi_spesifik = sapi_di_pen.apply(lambda r: f"{r['Kode Sapi']} - {r['RFID/Tag']}", axis=1).tolist()
                 pilihan_sapi = st.selectbox("↳ Pilih Sapi Target (Individu):", opsi_sapi_spesifik)
-                target_spesifik_val = pilihan_sapi # Simpan RFID/Kode Sapi target
+                target_spesifik_val = pilihan_sapi
             
             st.markdown("---")
             
-            # 4. Jenis Pakan (Sistem Dropdown Otomatis + Deteksi Dinamis)
             opsi_pakan_default = ["Konsentrat Hijau", "Silase", "Jerami Fermentasi", "Obat/Suplemen Khusus", "Lain-lain"]
             pakan_terpilih_dropdown = st.selectbox("4. Pilih Jenis / Nama Formula Pakan", opsi_pakan_default)
             
-            # Logika Kondisional: Jika memilih 'Lain-lain', buka kolom pengetikan manual baru
             if pakan_terpilih_dropdown == "Lain-lain":
                 jenis_pakan = st.text_input("📋 Masukkan Nama Formula Pakan Baru", placeholder="Contoh: Ampas Tahu, Konsentrat Penggemukan B, dll").strip()
             else:
                 jenis_pakan = pakan_terpilih_dropdown
             
-            # 5. Input kuantiti pakan
             if metode_pakan == "Serentak (Semua Sapi di Pen)":
                 pakan_per_ekor = st.number_input("5. Kuantitas Pakan per Ekor (kg/ekor)", min_value=0.0, step=0.1, format="%.2f")
                 total_pakan_terhitung = round(pakan_per_ekor * jumlah_sapi, 2)
@@ -86,7 +84,7 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                 )
             else:
                 total_pakan_terhitung = st.number_input("5. Total Kuantitas Pakan Khusus (kg) untuk Sapi Ini", min_value=0.0, step=0.1, format="%.2f")
-                pakan_per_ekor = total_pakan_terhitung # Untuk metode spesifik, total = pakan per ekor
+                pakan_per_ekor = total_pakan_terhitung
             
             st.markdown("---")
             
@@ -95,44 +93,37 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                     st.error("❌ Gagal Simpan! Jenis pakan wajib diisi/dipilih dan kuantiti harus lebih besar dari 0 kg.")
                 else:
                     with st.spinner("⏳ Sedang memproses distribusi pakan harian..."):
-                        # 1. Masukkan baris baru ke log pakan harian
                         row_pakan_baru = {
                             "Tanggal": str(tgl_pakan),
                             "Lokasi Pen": lokasi_pen_full,
                             "Metode": "Serentak" if metode_pakan == "Serentak (Semua Sapi di Pen)" else "Spesifik",
                             "Target Spesifik": target_spesifik_val,
                             "Jenis Pakan": jenis_pakan,
-                            "Jumlah Pakan (kg)": total_pakan_terhitung,
+                            "Jumlah Pakan (kg)": float(total_pakan_terhitung),
                             "Operator": user_name
                         }
                         df_pakan = pd.concat([df_pakan, pd.DataFrame([row_pakan_baru])], ignore_index=True)
                         write_df_to_sheet("pakan_harian", df_pakan, COLS_PAKAN)
                         
-                        # 2. Distribusikan jatah
                         if metode_pakan == "Serentak (Semua Sapi di Pen)":
-                            df_sapi.loc[df_sapi["Lokasi Pen"] == lokasi_pen_full, "Total Pakan (kg)"] += pakan_per_ekor
+                            df_sapi.loc[df_sapi["Lokasi Pen"] == lokasi_pen_full, "Total Pakan (kg)"] += float(pakan_per_ekor)
                             df_sapi.loc[df_sapi["Lokasi Pen"] == lokasi_pen_full, "Tgl Pakan Terakhir"] = str(tgl_pakan)
                             detail_sukses = f"Mendistribusikan Serentak {jenis_pakan} (@{pakan_per_ekor} kg/ekor) ke {lokasi_pen_full} (Total: {total_pakan_terhitung} kg untuk {jumlah_sapi} ekor)"
                         else:
-                            # Ekstrak Kode/RFID target
                             target_kode = target_spesifik_val.split(" - ")[0]
                             target_rfid = target_spesifik_val.split(" - ")[1]
-                            
                             mask_spesifik = (df_sapi["Kode Sapi"] == target_kode) & (df_sapi["RFID/Tag"] == target_rfid)
-                            df_sapi.loc[mask_spesifik, "Total Pakan (kg)"] += total_pakan_terhitung
+                            df_sapi.loc[mask_spesifik, "Total Pakan (kg)"] += float(total_pakan_terhitung)
                             df_sapi.loc[mask_spesifik, "Tgl Pakan Terakhir"] = str(tgl_pakan)
                             detail_sukses = f"Memberikan Khusus {jenis_pakan} ({total_pakan_terhitung} kg) kepada Sapi {target_spesifik_val} di {lokasi_pen_full}"
 
                         save_data(df_sapi)
-                        
-                        # 3. Rekam audit log
                         add_activity_log(user_name, "Input Pakan", detail_sukses)
                         
                     st.success(f"🎉 Berhasil! {detail_sukses}")
-                    st.balloons()
                     st.rerun()
 
-    # ==================== TAB 2: EDIT / HAPUS (PASSWORD LOCKED) ====================
+    # ==================== TAB 2: EDIT / HAPUS ====================
     with tab2:
         st.markdown("### 📋 Koreksi & Pembersihan Salah Input Pakan")
         
@@ -150,8 +141,7 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
             idx_pilihan = pilihan_no - 1
             row_lama = df_pakan.iloc[idx_pilihan]
             
-            # Ekstrak detail row lama
-            metode_lama = row_lama.get("Metode", "Serentak") # Backward compatibility
+            metode_lama = row_lama.get("Metode", "Serentak")
             target_lama = row_lama.get("Target Spesifik", "-")
             
             st.info(f"📍 **Data Terpilih:** Pen {row_lama['Lokasi Pen']} | Metode: **{metode_lama}** {f'({target_lama})' if metode_lama == 'Spesifik' else ''} | {row_lama['Jenis Pakan']} | {row_lama['Jumlah Pakan (kg)']} kg")
@@ -159,7 +149,6 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
             col_form, col_auth = st.columns(2)
             
             with col_form:
-                # Hanya izinkan ganti Pen jika metodenya serentak. Jika spesifik, ganti pen bisa berisiko salah target sapi
                 if metode_lama == "Serentak":
                     pen_baru = st.selectbox("Koreksi Tujuan Pen", list(daftar_pen_lengkap), index=list(daftar_pen_lengkap).index(row_lama["Lokasi Pen"]) if row_lama["Lokasi Pen"] in daftar_pen_lengkap else 0)
                 else:
@@ -167,10 +156,10 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                     pen_baru = row_lama["Lokasi Pen"]
                 
                 jenis_baru = st.text_input("Koreksi Jenis Pakan", value=str(row_lama["Jenis Pakan"])).strip()
-                jumlah_baru = st.number_input("Koreksi Total Jumlah Pakan (kg)", min_value=0.0, value=float(row_lama["Jumlah Pakan (kg)"]), step=1.0, format="%.1f")
+                jumlah_baru = st.number_input("Koreksi Total Jumlah Pakan (kg)", min_value=0.0, value=float(row_lama["Jumlah Pakan (kg)"]), step=1.0, format="%.2f")
                 
             with col_auth:
-                st.warning("⚠️ **Perhatian:** Tindakan perubahan atau penghapusan riwayat pakan harian akan diverifikasi langsung menggunakan kata sandi Admin.")
+                st.warning("⚠️ **Perhatian:** Tindakan perubahan ini diawasi ketat. Masukkan Password Admin.")
                 pwd_input = st.text_input("Masukkan Password Otorisasi Admin", type="password", key="auth_pakan_pass")
             
             st.markdown(" ")
@@ -181,7 +170,6 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
             except Exception:
                 correct_admin_pwd = "admin123"
 
-            # --- SELEKSI EKSEKUSI BUTTON EDIT ---
             if btn_col1.button("✏️ Simpan Perubahan Data", type="primary", use_container_width=True):
                 if pwd_input != correct_admin_pwd:
                     st.error("❌ Otorisasi Ditolak! Password Admin Kandang salah.")
@@ -194,9 +182,9 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                         if metode_lama == "Serentak":
                             sapi_pen_lama = df_sapi[df_sapi["Lokasi Pen"] == row_lama["Lokasi Pen"]]
                             if len(sapi_pen_lama) > 0:
-                                share_lama = round(float(row_lama["Jumlah Pakan (kg)"]) / len(sapi_pen_lama), 2)
+                                share_lama = float(row_lama["Jumlah Pakan (kg)"]) / len(sapi_pen_lama)
                                 df_sapi.loc[df_sapi["Lokasi Pen"] == row_lama["Lokasi Pen"], "Total Pakan (kg)"] -= share_lama
-                        else: # Spesifik
+                        else:
                             if target_lama != "-":
                                 target_kode = target_lama.split(" - ")[0]
                                 target_rfid = target_lama.split(" - ")[1]
@@ -209,30 +197,58 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                         if metode_lama == "Serentak":
                             sapi_pen_baru = df_sapi[df_sapi["Lokasi Pen"] == pen_baru]
                             if len(sapi_pen_baru) > 0:
-                                share_baru = round(jumlah_baru / len(sapi_pen_baru), 2)
+                                share_baru = float(jumlah_baru) / len(sapi_pen_baru)
                                 df_sapi.loc[df_sapi["Lokasi Pen"] == pen_baru, "Total Pakan (kg)"] += share_baru
-                        else: # Spesifik (Hanya jumlah yang berubah, target tetap)
+                        else:
                             if target_lama != "-":
                                 target_kode = target_lama.split(" - ")[0]
                                 target_rfid = target_lama.split(" - ")[1]
                                 mask_tambah = (df_sapi["Kode Sapi"] == target_kode) & (df_sapi["RFID/Tag"] == target_rfid)
-                                df_sapi.loc[mask_tambah, "Total Pakan (kg)"] += jumlah_baru
+                                df_sapi.loc[mask_tambah, "Total Pakan (kg)"] += float(jumlah_baru)
 
                         save_data(df_sapi)
 
                         # Update sheet log pakan
                         df_pakan.at[idx_pilihan, "Lokasi Pen"] = pen_baru
                         df_pakan.at[idx_pilihan, "Jenis Pakan"] = jenis_baru
-                        df_pakan.at[idx_pilihan, "Jumlah Pakan (kg)"] = jumlah_baru
+                        df_pakan.at[idx_pilihan, "Jumlah Pakan (kg)"] = float(jumlah_baru)
                         df_pakan.at[idx_pilihan, "Operator"] = f"{user_name} (Edited)"
                         write_df_to_sheet("pakan_harian", df_pakan, COLS_PAKAN)
 
-                        add_activity_log(user_name, "Koreksi Pakan", f"Mengubah log pakan No {pilihan_no}: Dari [{row_lama['Jenis Pakan']} - {row_lama['Jumlah Pakan (kg)']}kg] Menjadi [{jenis_baru} - {jumlah_baru}kg]")
+                        add_activity_log(user_name, "Koreksi Pakan", f"Mengubah log pakan No {pilihan_no}: Dari [{row_lama['Jumlah Pakan (kg)']}kg] Menjadi [{jumlah_baru}kg]")
                         
                     st.success(f"✅ Sukses! Data pakan No Urut {pilihan_no} berhasil diperbaiki.")
                     st.rerun()
 
-# ==================== TAB 3: REKAPITULASI PAKAN ====================
+            if btn_col2.button("🗑️ Hapus Data Permanen", type="secondary", use_container_width=True):
+                if pwd_input != correct_admin_pwd:
+                    st.error("❌ Otorisasi Ditolak! Password Admin Kandang salah.")
+                else:
+                    with st.spinner("🔄 Sedang memotong balik akumulasi pakan sapi..."):
+                        if metode_lama == "Serentak":
+                            sapi_pen_lama = df_sapi[df_sapi["Lokasi Pen"] == row_lama["Lokasi Pen"]]
+                            if len(sapi_pen_lama) > 0:
+                                share_lama = float(row_lama["Jumlah Pakan (kg)"]) / len(sapi_pen_lama)
+                                df_sapi.loc[df_sapi["Lokasi Pen"] == row_lama["Lokasi Pen"], "Total Pakan (kg)"] -= share_lama
+                        else:
+                            if target_lama != "-":
+                                target_kode = target_lama.split(" - ")[0]
+                                target_rfid = target_lama.split(" - ")[1]
+                                mask_tarik = (df_sapi["Kode Sapi"] == target_kode) & (df_sapi["RFID/Tag"] == target_rfid)
+                                df_sapi.loc[mask_tarik, "Total Pakan (kg)"] -= float(row_lama["Jumlah Pakan (kg)"])
+
+                        df_sapi["Total Pakan (kg)"] = df_sapi["Total Pakan (kg)"].clip(lower=0.0)
+                        save_data(df_sapi)
+
+                        df_pakan = df_pakan.drop(df_pakan.index[idx_pilihan]).reset_index(drop=True)
+                        write_df_to_sheet("pakan_harian", df_pakan, COLS_PAKAN)
+
+                        add_activity_log(user_name, "Hapus Pakan", f"Menghapus log pakan No {pilihan_no}: Terhapus data di {row_lama['Lokasi Pen']}")
+                        
+                    st.success(f"🗑️ Sukses! Record pakan No Urut {pilihan_no} berhasil dihapus permanen.")
+                    st.rerun()
+
+    # ==================== TAB 3: REKAPITULASI PAKAN ====================
     with tab3:
         st.markdown("### 📊 Rekapitulasi & Realisasi Konsumsi Pakan")
         
@@ -244,7 +260,6 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
             
             # 2. Siapkan data rekap pakan
             df_rekap = df_pakan.copy()
-            df_rekap["Jumlah Pakan (kg)"] = pd.to_numeric(df_rekap["Jumlah Pakan (kg)"], errors="coerce").fillna(0)
             
             # 3. Kelompokkan berdasarkan Lokasi Pen dan Jenis Pakan
             rekap_grup = df_rekap.groupby(["Lokasi Pen", "Jenis Pakan"])["Jumlah Pakan (kg)"].sum().reset_index()
@@ -256,7 +271,7 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                     return round(row["Jumlah Pakan (kg)"] / jml_sapi, 2)
                 return 0.0
             
-            rekap_grup["Jumlah Sapi di Pen"] = rekap_grup["Lokasi Pen"].map(lambda x: pen_counts.get(x, 0))
+            rekap_grup["Jumlah Sapi di Pen (Aktif)"] = rekap_grup["Lokasi Pen"].map(lambda x: pen_counts.get(x, 0))
             rekap_grup["Konsumsi Per Ekor (kg)"] = rekap_grup.apply(hitung_per_ekor, axis=1)
             
             # Ganti nama kolom agar enak dibaca di tabel
@@ -271,35 +286,3 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                     "Konsumsi Per Ekor (kg)": st.column_config.NumberColumn(format="%.2f")
                 }
             )
-            
-            # --- SELEKSI EKSEKUSI BUTTON HAPUS ---
-            if btn_col2.button("🗑️ Hapus Data Permanen", type="secondary", use_container_width=True):
-                if pwd_input != correct_admin_pwd:
-                    st.error("❌ Otorisasi Ditolak! Password Admin Kandang salah.")
-                else:
-                    with st.spinner("🔄 Sedang memotong balik akumulasi pakan sapi..."):
-                        
-                        # TARIK BALIK DATA LAMA
-                        if metode_lama == "Serentak":
-                            sapi_pen_lama = df_sapi[df_sapi["Lokasi Pen"] == row_lama["Lokasi Pen"]]
-                            if len(sapi_pen_lama) > 0:
-                                share_lama = round(float(row_lama["Jumlah Pakan (kg)"]) / len(sapi_pen_lama), 2)
-                                df_sapi.loc[df_sapi["Lokasi Pen"] == row_lama["Lokasi Pen"], "Total Pakan (kg)"] -= share_lama
-                        else: # Spesifik
-                            if target_lama != "-":
-                                target_kode = target_lama.split(" - ")[0]
-                                target_rfid = target_lama.split(" - ")[1]
-                                mask_tarik = (df_sapi["Kode Sapi"] == target_kode) & (df_sapi["RFID/Tag"] == target_rfid)
-                                df_sapi.loc[mask_tarik, "Total Pakan (kg)"] -= float(row_lama["Jumlah Pakan (kg)"])
-
-                        df_sapi["Total Pakan (kg)"] = df_sapi["Total Pakan (kg)"].clip(lower=0.0)
-                        
-                        save_data(df_sapi)
-
-                        df_pakan = df_pakan.drop(df_pakan.index[idx_pilihan]).reset_index(drop=True)
-                        write_df_to_sheet("pakan_harian", df_pakan, COLS_PAKAN)
-
-                        add_activity_log(user_name, "Hapus Pakan", f"Menghapus log pakan No {pilihan_no}: Terhapus data {row_lama['Jenis Pakan']} ({metode_lama}) di {row_lama['Lokasi Pen']}")
-                        
-                    st.success(f"🗑️ Sukses! Record pakan No Urut {pilihan_no} berhasil dihapus permanen.")
-                    st.rerun()
