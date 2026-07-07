@@ -51,6 +51,25 @@ def tampilkan_menu_registrasi(df_sapi, list_jenis_sapi, struktur_kandang, save_d
 
                 lokasi_pen_final = f"{pilihan_blok} - {pilihan_pen}"
 
+                # --- FITUR BARU: CEK KAPASITAS PEN (MAKS 25 EKOR) ---
+                sapi_di_pen = len(df_sapi[df_sapi["Lokasi Pen"] == lokasi_pen_final])
+                if sapi_di_pen >= 25:
+                    pen_rekomendasi = []
+                    for b, pens in struktur_kandang.items():
+                        for p in pens:
+                            nama_full = f"{b} - {p}"
+                            isi = len(df_sapi[df_sapi["Lokasi Pen"] == nama_full])
+                            if isi < 25:
+                                pen_rekomendasi.append(f"{nama_full} (Isi: {isi}/25)")
+                    
+                    saran_teks = "\n* ".join(pen_rekomendasi[:5])
+                    st.error(f"❌ Gagal Registrasi! Pen **{lokasi_pen_final}** sudah penuh (Maksimal 25 ekor). Saat ini berisi {sapi_di_pen} ekor.")
+                    if pen_rekomendasi:
+                        st.info(f"💡 **Saran Pen yang Masih Tersedia:**\n* {saran_teks}")
+                    else:
+                        st.warning("⚠️ Semua pen di kandang saat ini sudah penuh!")
+                    return
+
                 new_cow = {
                     "Kode Sapi": kode_tiba, 
                     "RFID/Tag Asal": rfid_tag_asal if rfid_tag_asal else "-",
@@ -75,7 +94,7 @@ def tampilkan_menu_registrasi(df_sapi, list_jenis_sapi, struktur_kandang, save_d
                 st.success(f"🎉 Berhasil! Sapi dengan Kode Tiba {kode_tiba} telah terdaftar.")
                 st.rerun()
 
-    # ==================== TAB 2: EDIT / HAPUS (FIXED KEYERROR) ====================
+    # ==================== TAB 2: EDIT / HAPUS ====================
     with tab_edit_hapus:
         st.markdown("### ⚙️ Panel Koreksi Data Registrasi")
         
@@ -83,7 +102,6 @@ def tampilkan_menu_registrasi(df_sapi, list_jenis_sapi, struktur_kandang, save_d
             st.info("Belum ada data sapi aktif di database untuk diedit.")
             return
 
-        # Mengubah r['Kode Tiba'] menjadi r['Kode Sapi'] sesuai skema df_sapi di app.py
         opsi_sapi = df_sapi.apply(lambda r: f"No. {r.name + 1} | Kelompok: {r['Kode Sapi']} | RFID: {r['RFID/Tag']} | Pen: {r['Lokasi Pen']}", axis=1).tolist()
         sapi_terpilih = st.selectbox("Pilih Sapi Yang Akan Di-Koreksi/Hapus:", opsi_sapi)
         

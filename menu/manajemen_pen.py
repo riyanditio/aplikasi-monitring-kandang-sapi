@@ -6,7 +6,6 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
     st.subheader("🏠 Manajemen Blok Kandang & Mutasi Pen Sapi")
     st.markdown("Kelola perpindahan lokasi sapi antar Blok Kandang dan Pen secara terstruktur sesuai fase pemeliharaan.")
 
-    # Ambil tanggal hari ini (WIB)
     zona_wib = timezone(timedelta(hours=7))
     tgl_hari_ini = datetime.now(zona_wib).strftime("%Y-%m-%d")
 
@@ -14,7 +13,6 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
         st.warning("⚠️ Belum ada data sapi aktif di dalam kandang. Silakan lakukan Registrasi Sapi Baru terlebih dahulu.")
         return
 
-    # --- REKONSTRUKSI STRUKTUR HIRARKI DARI DAFTAR_PEN ---
     struktur_kandang = {}
     for item in DAFTAR_PEN:
         if " - " in item:
@@ -27,7 +25,6 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
                 struktur_kandang["Lainnya"] = []
             struktur_kandang["Lainnya"].append(item)
 
-    # Otorisasi Tabs Berdasarkan Role User
     if user_role == "Admin":
         tab_status, tab_mutasi, tab_pengaturan = st.tabs([
             "📊 Sebaran Populasi per Blok & Pen", 
@@ -40,10 +37,27 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
             "🔄 Jalankan Mutasi Sapi"
         ])
 
-    # ==================== TAB 1: SEBARAN POPULASI ====================
+    # ==================== TAB 1: SEBARAN POPULASI (DENGAN INDIKATOR WARNA) ====================
     with tab_status:
         st.markdown("### 🏬 Peta Distribusi Sapi Saat Ini")
+        st.caption("💡 **Legenda Warna:** 🟥 Background Merah = Sapi Sakit/Isolasi | 🟨 Background Kuning = Performa ADG Rendah (< 1.6 kg/hari)")
         
+        # --- FUNGSI PEWARNAAN TABEL ---
+        def highlight_sapi_pen(row):
+            is_sakit = "Isolasi" in str(row.get("Lokasi Pen", ""))
+            if is_sakit:
+                return ['background-color: rgba(255, 75, 75, 0.2)'] * len(row)
+            
+            try:
+                adg = float(row.get("ADG (kg/hari)", 0.0))
+                tgl_cek = str(row.get("Tgl Cek Akhir", ""))
+                tgl_masuk = str(row.get("Tgl Masuk", ""))
+                if adg < 1.6 and tgl_cek != tgl_masuk and tgl_cek != "nan":
+                    return ['background-color: rgba(255, 193, 7, 0.2)'] * len(row)
+            except:
+                pass
+            return [''] * len(row)
+
         sapi_terpetakan_idx = []
         for blok, pens in struktur_kandang.items():
             sapi_di_blok = df_sapi[df_sapi["Lokasi Pen"].str.startswith(blok, na=False)]
@@ -59,9 +73,16 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
                         sapi_di_pen = df_sapi[df_sapi["Lokasi Pen"] == full_name_pen]
                         
                         if not sapi_di_pen.empty:
-                            st.markdown(f"🔹 **{pen}** ({len(sapi_di_pen)} Ekor):")
-                            df_tampil = sapi_di_pen[["Kode Sapi", "RFID/Tag Asal", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Bobot Akhir (kg)", "Tgl Masuk"]].reset_index(drop=True)
-                            st.dataframe(df_tampil, use_container_width=True)
+                            st.markdown(f"🔹 **{pen}** ({len(sapi_di_pen)}/25 Ekor):")
+                            # Menambahkan ADG agar logic warna berfungsi dan dapat dilihat user
+                            df_tampil = sapi_di_pen[["Kode Sapi", "RFID/Tag Asal", "RFID/Tag", "Jenis Sapi", "Bobot Akhir (kg)", "ADG (kg/hari)", "Tgl Cek Akhir", "Tgl Masuk", "Lokasi Pen"]].reset_index(drop=True)
+                            
+                            styled_df = df_tampil.style.apply(highlight_sapi_pen, axis=1)
+                            st.dataframe(
+                                styled_df, 
+                                use_container_width=True,
+                                column_config={"Lokasi Pen": None} # Sembunyikan kolom Lokasi Pen dari layar
+                            )
                         else:
                             st.markdown(f"⚪ *{pen}* : (Kosong)")
 
@@ -112,8 +133,25 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
             tombol_siap = True
             
         if st.button("🚀 Eksekusi Pemindahan Sapi", type="primary", use_container_width=True, disabled=not tombol_siap):
-            lokasi_asal = sapi_row["Lokasi Pen"]
             
+            # --- FITUR BARU: CEK KAPASITAS PEN MUTASI ---
+            sapi_di_pen_tujuan = len(df_sapi[df_sapi["Lokasi Pen"] == full_lokasi_tujuan])
+            if sapi_di_pen_tujuan >= 25:
+                pen_rekomendasi = []
+                for b, pens in struktur_kandang.items():
+                    for p in pens:
+                        nama_full = f"{b} - {p}"
+                        isi = len(df_sapi[df_sapi["Lokasi Pen"] == nama_full])
+                        if isi < 25:
+                            pen_rekomendasi.append(f"{nama_full} (Isi: {isi}/25)")
+                
+                saran_teks = "\n* ".join(pen_rekomendasi[:5])
+                st.error(f"❌ Mutasi Gagal! Pen **{full_lokasi_tujuan}** sudah penuh (Maksimal 25 ekor). Saat ini berisi {sapi_di_pen_tujuan} ekor.")
+                if pen_rekomendasi:
+                    st.info(f"💡 **Saran Pen Tujuan Lain:**\n* {saran_teks}")
+                return
+
+            lokasi_asal = sapi_row["Lokasi Pen"]
             mask = (df_sapi["Kode Sapi"] == kode_sapi_asli) & (df_sapi["RFID/Tag"] == rfid_sapi_asli)
             df_sapi.loc[mask, "Lokasi Pen"] = full_lokasi_tujuan
             save_data(df_sapi)
@@ -167,7 +205,6 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
                 if st.button("🗑️ Hapus Pen Terpilih", type="secondary"):
                     b_hapus, p_hapus = pen_dihapus.split(" - ", 1)
                     
-                    # Proteksi: Pastikan tidak ada sapi aktif di pen yang mau dihapus
                     sapi_di_pen = df_sapi[df_sapi["Lokasi Pen"] == pen_dihapus]
                     if not sapi_di_pen.empty:
                         st.error(f"❌ Tidak bisa menghapus! Masih ada {len(sapi_di_pen)} ekor sapi aktif di {pen_dihapus}. Silakan mutasi sapinya ke pen lain terlebih dahulu.")
