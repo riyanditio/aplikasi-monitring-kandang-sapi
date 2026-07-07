@@ -203,29 +203,30 @@ def save_jenis_sapi(list_jenis):
     df = pd.DataFrame({"Jenis Sapi": list_jenis})
     write_df_to_sheet("jenis_sapi", df, cols)
 
-# --- FUNGSI MEMUAT DATA STRUKTUR BLOK & PEN SECARA DINAMIS ---
 def load_master_pen():
     cols = ["Blok", "Pen"]
     df = read_sheet_to_df("master_pen", cols)
     if df.empty:
-        # Sediakan template bawaan awal jika database kosong pertama kali
         default_kandang = [
             {"Blok": "Blok Karantina", "Pen": "Pen Karantina 1"},
             {"Blok": "Blok Karantina", "Pen": "Pen Karantina 2"},
             {"Blok": "Blok Karantina", "Pen": "Pen Karantina 3"},
             {"Blok": "Blok Penggemukan A (Bobot < 350kg)", "Pen": "Pen A1"},
             {"Blok": "Blok Penggemukan A (Bobot < 350kg)", "Pen": "Pen A2"},
+            {"Blok": "Blok Penggemukan A (Bobot < 350kg)", "Pen": "Pen A3"},
             {"Blok": "Blok Penggemukan B (Bobot 350-450kg)", "Pen": "Pen B1"},
             {"Blok": "Blok Penggemukan B (Bobot 350-450kg)", "Pen": "Pen B2"},
+            {"Blok": "Blok Penggemukan B (Bobot 350-450kg)", "Pen": "Pen B3"},
             {"Blok": "Blok Penggemukan C (Bobot > 450kg)", "Pen": "Pen C1"},
             {"Blok": "Blok Penggemukan C (Bobot > 450kg)", "Pen": "Pen C2"},
-            {"Blok": "Blok Isolasi & Perawatan (Sakit)", "Pen": "Pen Isolasi 1"}
+            {"Blok": "Blok Penggemukan C (Bobot > 450kg)", "Pen": "Pen C3"},
+            {"Blok": "Blok Isolasi & Perawatan (Sakit)", "Pen": "Pen Isolasi 1"},
+            {"Blok": "Blok Isolasi & Perawatan (Sakit)", "Pen": "Pen Isolasi 2"}
         ]
         df = pd.DataFrame(default_kandang)
         write_df_to_sheet("master_pen", df, cols)
     return df
 
-# --- PENYESUAIAN SKEMA DATA MASTER SAPI ---
 def load_data():
     cols = ["Kode Sapi", "RFID/Tag Asal", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Umur Masuk (Bulan)", "Asal Negara", "Tgl Masuk", "Bobot Awal (kg)", "Tgl Cek Akhir", "Bobot Akhir (kg)", "ADG (kg/hari)", "Total Pakan (kg)", "Tgl Pakan Terakhir", "Lokasi Pen"]
     df = read_sheet_to_df("data_sapi", cols)
@@ -236,9 +237,7 @@ def load_data():
         df["Umur Masuk (Bulan)"] = 12
         df = df.drop(columns=["Umur Sapi"])
     if "Kode Sapi" not in df.columns: df["Kode Sapi"] = "-"
-    
     if "RFID/Tag Asal" not in df.columns: df["RFID/Tag Asal"] = "-"
-        
     if "Jenis Kelamin" not in df.columns: df["Jenis Kelamin"] = "Jantan"
     if "Total Pakan (kg)" not in df.columns: df["Total Pakan (kg)"] = 0.0
     if "Tgl Pakan Terakhir" not in df.columns: df["Tgl Pakan Terakhir"] = "-"
@@ -381,9 +380,8 @@ else:
 
     # ==================== CONTROLLER MENU ROUTING ====================
     if menu == "📊 Dashboard & Tabel Monitor":
-        tampilkan_dashboard(df_sapi)
+        tampilkan_dashboard(df_sapi, read_sheet_to_df) # Ditambahkan pass function
     elif menu == "🏠 Manajemen Pen & Mutasi Sapi":
-        # DI SINI FIX UTAMA: Ditambahkan pemanggilan pembaca dan penulis sheet ke sub-menu
         tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, calculate_adg, save_data, add_activity_log, user_name, read_sheet_to_df, write_df_to_sheet)
     elif menu == "🐂 Kelola Master Jenis Sapi":
         tampilkan_menu_jenis_sapi(LIST_JENIS_SAPI, save_jenis_sapi, add_activity_log, user_name)
@@ -405,7 +403,7 @@ else:
     elif menu == "🍽️ Input Pakan Harian":
         tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log, user_name, read_sheet_to_df, write_df_to_sheet)
     elif menu == "⚖️ Input Timbangan Berkala":
-        tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log, user_name)
+        tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log, user_name, read_sheet_to_df, write_df_to_sheet) # Ditambahkan fungsi baca tulis
     elif menu == "📈 Analisis & Grafik Performa":
         tampilkan_menu_analisis_grafik(df_sapi, DAFTAR_PEN)
     elif menu == "💰 Manajemen Panen & Penjualan":
