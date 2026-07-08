@@ -14,12 +14,65 @@ def tampilkan_menu_karantina(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_
     mask_karantina = df_sapi["Lokasi Pen"].str.contains("Karantina|Isolasi", case=False, na=False)
     df_sapi_karantina = df_sapi[mask_karantina]
 
-    tab1, tab2, tab3, tab4 = st.tabs([
+    # Ambil struktur pen khusus Karantina & Isolasi
+    struktur_karantina = {b: p for b, p in STRUKTUR_KANDANG.items() if "karantina" in b.lower() or "isolasi" in b.lower()}
+
+    tab_status, tab1, tab2, tab3, tab4 = st.tabs([
+        "📊 Sebaran Populasi Karantina",
         "🩺 Tindakan Medis & Observasi", 
         "🚪 Mutasi Lulus Karantina", 
         "⚙️ Edit / Hapus Data Medis", 
         "📜 Riwayat & Rekam Medis"
     ])
+
+    # ==================== TAB 0: SEBARAN POPULASI KARANTINA & ISOLASI ====================
+    with tab_status:
+        st.markdown("### 🏬 Peta Distribusi Sapi Karantina & Isolasi Saat Ini")
+        st.caption("💡 **Legenda Warna:** 🟥 Background Merah = Sapi Sakit/Isolasi | 🟨 Background Kuning = Performa ADG Rendah (< 1.6 kg/hari)")
+        
+        def highlight_sapi_pen(row):
+            is_sakit = "Isolasi" in str(row.get("Lokasi Pen", ""))
+            if is_sakit: return ['background-color: rgba(255, 75, 75, 0.2)'] * len(row)
+            try:
+                adg = float(row.get("ADG (kg/hari)", 0.0))
+                tgl_cek = str(row.get("Tgl Cek Akhir", ""))
+                tgl_masuk = str(row.get("Tgl Masuk", ""))
+                if adg < 1.6 and tgl_cek != tgl_masuk and tgl_cek != "nan":
+                    return ['background-color: rgba(255, 193, 7, 0.2)'] * len(row)
+            except: pass
+            return [''] * len(row)
+
+        if not struktur_karantina:
+            st.info("ℹ️ Tidak ada blok Karantina atau Isolasi yang terdaftar di master pen kandang.")
+        else:
+            for blok, pens in struktur_karantina.items():
+                sapi_di_blok = df_sapi_karantina[df_sapi_karantina["Lokasi Pen"].str.startswith(blok, na=False)]
+                total_sapi_blok = len(sapi_di_blok)
+                 
+                with st.expander(f"📂 {blok.upper()} (Total: {total_sapi_blok} Ekor)", expanded=True):
+                    if total_sapi_blok == 0:
+                        st.caption("ℹ️ Blok kandang ini masih kosong.")
+                    else:
+                        for pen in pens:
+                            full_name_pen = f"{blok} - {pen}"
+                            sapi_di_pen = df_sapi_karantina[df_sapi_karantina["Lokasi Pen"] == full_name_pen]
+                            
+                            if not sapi_di_pen.empty:
+                                st.markdown(f"🔹 **{pen}** ({len(sapi_di_pen)}/25 Ekor):")
+                                df_tampil = sapi_di_pen[["Kode Sapi", "RFID/Tag Asal", "RFID/Tag", "Jenis Sapi", "Bobot Akhir (kg)", "ADG (kg/hari)", "Tgl Cek Akhir", "Tgl Masuk", "Lokasi Pen"]].reset_index(drop=True)
+                                
+                                styled_df = df_tampil.style.apply(highlight_sapi_pen, axis=1)
+                                st.dataframe(
+                                    styled_df, 
+                                    use_container_width=True, hide_index=True,
+                                    column_config={
+                                        "Lokasi Pen": None,
+                                        "Bobot Akhir (kg)": st.column_config.NumberColumn(format="%.2f"),
+                                        "ADG (kg/hari)": st.column_config.NumberColumn(format="%.2f")
+                                    }
+                                )
+                            else:
+                                st.markdown(f"⚪ *{pen}* : (Kosong)")
 
     # ==================== TAB 1: TINDAKAN MEDIS ====================
     with tab1:
@@ -95,7 +148,7 @@ def tampilkan_menu_karantina(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_
             st.markdown("#### 🎯 Pilih Pen Penggemukan Tujuan")
             c_mut1, c_mut2 = st.columns(2)
             with c_mut1:
-                blok_tujuan = st.selectbox("Blok Penggemukan:", [b for b in STRUKTUR_KANDANG.keys() if "karantina" not in b.lower()])
+                blok_tujuan = st.selectbox("Blok Penggemukan:", [b for b in STRUKTUR_KANDANG.keys() if "karantina" not in b.lower() and "isolasi" not in b.lower()])
             with c_mut2:
                 pen_tujuan = st.selectbox("Pen Tujuan:", STRUKTUR_KANDANG.get(blok_tujuan, [])) if blok_tujuan else None
                 
