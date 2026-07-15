@@ -4,3 +4,7 @@ __pycache__/
 
 # Rekomendasi tambahan: Abaikan database cadangan lokal agar tidak bocor ke GitHub
 *.csv
+
+# --- PENTING: Mengabaikan file kredensial rahasia agar tidak bocor ke GitHub ---
+.streamlit/secrets.toml
+secrets.toml

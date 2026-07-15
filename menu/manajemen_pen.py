@@ -47,7 +47,7 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
 
     # ==================== TAB 1: SEBARAN POPULASI ====================
     with tab_status:
-        # --- TAMBAHAN FITUR: PENCARIAN RIWAYAT SAPI DI TAB MUTASI ---
+        # --- TAMBAHAN FITUR: PENCARIAN RIWAYAT SAPI LENGKAP ---
         with st.expander("🔍 Cari Profil & Riwayat Sapi Lengkap (Penggemukan)", expanded=False):
             opsi_cari_sapi = df_sapi_penggemukan.apply(lambda r: f"{r['Kode Sapi']} - RFID: {r['RFID/Tag']}", axis=1).tolist()
             sapi_dicari = st.selectbox("Pilih Sapi untuk melihat detail (Timbangan & Pakan):", ["-- Silakan Pilih Sapi --"] + opsi_cari_sapi, key="cari_mutasi")
@@ -59,21 +59,29 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
                 
                 st.info(f"**Posisi Saat Ini:** {inf['Lokasi Pen']} | **Bobot Terakhir:** {float(inf['Bobot Akhir (kg)']):.2f} kg | **Total Pakan Masuk:** {float(inf['Total Pakan (kg)']):.2f} kg")
                 
-                cc1, cc2 = st.columns(2)
-                with cc1:
-                    df_r_timbang = read_sheet_to_df("riwayat_timbangan", ["Tanggal Timbang", "Kode Sapi", "RFID/Tag", "Lokasi Pen", "Bobot (kg)", "ADG (kg/hari)", "Operator"])
-                    df_r_timbang = df_r_timbang[(df_r_timbang["Kode Sapi"] == k_cari) & (df_r_timbang["RFID/Tag"] == r_cari)]
-                    if not df_r_timbang.empty:
-                        st.dataframe(df_r_timbang[["Tanggal Timbang", "Bobot (kg)", "ADG (kg/hari)"]].sort_values("Tanggal Timbang", ascending=False), hide_index=True, column_config={"Bobot (kg)": st.column_config.NumberColumn(format="%.2f"), "ADG (kg/hari)": st.column_config.NumberColumn(format="%.2f")}, use_container_width=True)
-                    else:
-                        st.caption("Belum ada riwayat timbangan")
-                with cc2:
-                    df_r_pakan = read_sheet_to_df("pakan_harian", ["Tanggal", "Lokasi Pen", "Metode", "Target Spesifik", "Jenis Pakan", "Jumlah Pakan (kg)", "Operator"])
-                    df_r_pakan_spesifik = df_r_pakan[(df_r_pakan["Metode"] == "Spesifik") & (df_r_pakan["Target Spesifik"] == f"{k_cari} - {r_cari}")]
-                    if not df_r_pakan_spesifik.empty:
-                        st.dataframe(df_r_pakan_spesifik[["Tanggal", "Jenis Pakan", "Jumlah Pakan (kg)"]].sort_values("Tanggal", ascending=False), hide_index=True, column_config={"Jumlah Pakan (kg)": st.column_config.NumberColumn(format="%.2f")}, use_container_width=True)
-                    else:
-                        st.caption("Belum ada riwayat pakan medis/individu.")
+                # [OPTIMASI 1]: Gunakan Checkbox Kontrol Aktivasi agar database tidak ditembak otomatis saat user membuka Tab lain
+                cek_riwayat = st.checkbox("📊 Tampilkan Detail Riwayat Medis & Timbangan Sapi", value=False, key=f"load_profil_{k_cari}")
+                
+                if cek_riwayat:
+                    cc1, cc2 = st.columns(2)
+                    with cc1:
+                        st.markdown("**📋 Log Riwayat Timbangan Berkala**")
+                        df_r_timbang = read_sheet_to_df("riwayat_timbangan", ["Tanggal Timbang", "Kode Sapi", "RFID/Tag", "Lokasi Pen", "Bobot (kg)", "ADG (kg/hari)", "Operator"])
+                        df_r_timbang = df_r_timbang[(df_r_timbang["Kode Sapi"] == k_cari) & (df_r_timbang["RFID/Tag"] == r_cari)]
+                        if not df_r_timbang.empty:
+                            st.dataframe(df_r_timbang[["Tanggal Timbang", "Bobot (kg)", "ADG (kg/hari)"]].sort_values("Tanggal Timbang", ascending=False), hide_index=True, column_config={"Bobot (kg)": st.column_config.NumberColumn(format="%.2f"), "ADG (kg/hari)": st.column_config.NumberColumn(format="%.2f")}, use_container_width=True)
+                        else:
+                            st.caption("Belum ada riwayat timbangan.")
+                    with cc2:
+                        st.markdown("**🍽️ Log Pakan Khusus / Individu**")
+                        df_r_pakan = read_sheet_to_df("pakan_harian", ["Tanggal", "Lokasi Pen", "Metode", "Target Spesifik", "Jenis Pakan", "Jumlah Pakan (kg)", "Operator"])
+                        df_r_pakan_spesifik = df_r_pakan[(df_r_pakan["Metode"] == "Spesifik") & (df_r_pakan["Target Spesifik"] == f"{k_cari} - {r_cari}")]
+                        if not df_r_pakan_spesifik.empty:
+                            st.dataframe(df_r_pakan_spesifik[["Tanggal", "Jenis Pakan", "Jumlah Pakan (kg)"]].sort_values("Tanggal", ascending=False), hide_index=True, column_config={"Jumlah Pakan (kg)": st.column_config.NumberColumn(format="%.2f")}, use_container_width=True)
+                        else:
+                            st.caption("Belum ada riwayat pakan medis/individu.")
+                else:
+                    st.caption("💡 *Centang opsi di atas untuk memuat riwayat timbangan dan pakan sapi ini dari database.*")
 
         st.markdown("---")
         st.markdown("### 🏬 Peta Distribusi Sapi Penggemukan Saat Ini")
@@ -182,38 +190,50 @@ def tampilkan_menu_pen_mutasi(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, user_role, c
     # ==================== TAB 3: PENGATURAN BLOK & PEN (ADMIN ONLY) ====================
     if user_role == "Admin":
         with tab_pengaturan:
-            st.markdown("### 🛠️ Tambah Blok & Pen Kandang Baru")
-            df_pen_db = read_sheet_to_df("master_pen", ["Blok", "Pen"])
-            blok_existing = sorted(df_pen_db["Blok"].dropna().unique().tolist()) if not df_pen_db.empty else []
+            st.markdown("### 🛠️ Kelola Struktur Pen Master")
             
-            pilih_blok_input = st.selectbox("Pilih Opsi Kategori Blok Kandang:", ["+ Buat Blok Baru Baru"] + blok_existing)
-            nama_blok = st.text_input("Masukkan Nama Blok Baru Anda:", placeholder="Contoh: Blok Penggemukan D").strip() if pilih_blok_input == "+ Buat Blok Baru Baru" else pilih_blok_input
-            nama_pen = st.text_input("Masukkan Nama Pen Kandang Baru:", placeholder="Contoh: Pen D1").strip()
+            # [OPTIMASI 2]: Gunakan toggle pengunci agar database pen tidak ditarik berulang saat admin sedang bekerja di Tab 1 atau Tab 2
+            siap_kelola = st.checkbox("🔌 Hubungkan & Buka Data Master Pen Kandang", value=False, key="kunci_master_pen")
             
-            if st.button("➕ Daftarkan Pen Baru Ke Google Sheets", type="primary"):
-                if not nama_blok or not nama_pen:
-                    st.error("⚠️ Nama Blok dan Nama Pen tidak diperbolehkan kosong!")
-                elif not df_pen_db[(df_pen_db["Blok"].str.lower() == nama_blok.lower()) & (df_pen_db["Pen"].str.lower() == nama_pen.lower())].empty:
-                    st.warning(f"⚠️ Pen '{nama_pen}' pada '{nama_blok}' sudah ada di database.")
-                else:
-                    df_pen_db = pd.concat([df_pen_db, pd.DataFrame([{"Blok": nama_blok, "Pen": nama_pen}])], ignore_index=True)
-                    write_df_to_sheet("master_pen", df_pen_db, ["Blok", "Pen"])
-                    add_activity_log(user_name, "Tambah Master Pen", f"Menambahkan Pen baru: {nama_blok} - {nama_pen}")
-                    st.success(f"🎉 Sukses menambahkan pen kandang: **{nama_blok} - {nama_pen}**")
-                    st.rerun()
-                        
-            st.markdown("---")
-            st.markdown("### 🗑️ Hapus Pen Kandang")
-            if not df_pen_db.empty:
-                pen_dihapus = st.selectbox("Pilih Lokasi Pen yang Ingin Dihapus:", sorted(df_pen_db.apply(lambda r: f"{r['Blok']} - {r['Pen']}", axis=1).tolist()))
+            if siap_kelola:
+                with st.spinner("⏳ Menarik data struktur pen dari database Supabase..."):
+                    df_pen_db = read_sheet_to_df("master_pen", ["Blok", "Pen"])
                 
-                if st.button("🗑️ Hapus Pen Terpilih", type="secondary"):
-                    b_hapus, p_hapus = pen_dihapus.split(" - ", 1)
-                    if not df_sapi[df_sapi["Lokasi Pen"] == pen_dihapus].empty:
-                        st.error(f"❌ Tidak bisa menghapus! Masih ada sapi aktif di {pen_dihapus}. Mutasi sapinya terlebih dahulu.")
+                st.markdown("#### ➕ Tambah Blok & Pen Kandang Baru")
+                blok_existing = sorted(df_pen_db["Blok"].dropna().unique().tolist()) if not df_pen_db.empty else []
+                
+                pilih_blok_input = st.selectbox("Pilih Opsi Kategori Blok Kandang:", ["+ Buat Blok Baru Baru"] + blok_existing)
+                nama_blok = st.text_input("Masukkan Nama Blok Baru Anda:", placeholder="Contoh: Blok Penggemukan D").strip() if pilih_blok_input == "+ Buat Blok Baru Baru" else pilih_blok_input
+                nama_pen = st.text_input("Masukkan Nama Pen Kandang Baru:", placeholder="Contoh: Pen D1").strip()
+                
+                if st.button("➕ Daftarkan Pen Baru ke Database", type="primary", use_container_width=True):
+                    if not nama_blok or not nama_pen:
+                        st.error("⚠️ Nama Blok dan Nama Pen tidak diperbolehkan kosong!")
+                    elif not df_pen_db[(df_pen_db["Blok"].str.lower() == nama_blok.lower()) & (df_pen_db["Pen"].str.lower() == nama_pen.lower())].empty:
+                        st.warning(f"⚠️ Pen '{nama_pen}' pada '{nama_blok}' sudah ada di database.")
                     else:
-                        df_pen_db = df_pen_db[~((df_pen_db["Blok"] == b_hapus) & (df_pen_db["Pen"] == p_hapus))]
-                        write_df_to_sheet("master_pen", df_pen_db, ["Blok", "Pen"])
-                        add_activity_log(user_name, "Hapus Master Pen", f"Menghapus Pen: {pen_dihapus}")
-                        st.success(f"🗑️ Lokasi Pen **{pen_dihapus}** sukses dihapus dari database.")
+                        with st.spinner("⏳ Menyimpan pen baru ke database..."):
+                            df_pen_db = pd.concat([df_pen_db, pd.DataFrame([{"Blok": nama_blok, "Pen": nama_pen}])], ignore_index=True)
+                            write_df_to_sheet("master_pen", df_pen_db, ["Blok", "Pen"])
+                        add_activity_log(user_name, "Tambah Master Pen", f"Menambahkan Pen baru: {nama_blok} - {nama_pen}")
+                        st.success(f"🎉 Sukses menambahkan pen kandang: **{nama_blok} - {nama_pen}**")
                         st.rerun()
+                            
+                st.markdown("---")
+                st.markdown("#### 🗑️ Hapus Pen Kandang")
+                if not df_pen_db.empty:
+                    pen_dihapus = st.selectbox("Pilih Lokasi Pen yang Ingin Dihapus:", sorted(df_pen_db.apply(lambda r: f"{r['Blok']} - {r['Pen']}", axis=1).tolist()))
+                    
+                    if st.button("🗑️ Hapus Pen Terpilih", type="secondary", use_container_width=True):
+                        b_hapus, p_hapus = pen_dihapus.split(" - ", 1)
+                        if not df_sapi[df_sapi["Lokasi Pen"] == pen_dihapus].empty:
+                            st.error(f"❌ Tidak bisa menghapus! Masih ada sapi aktif di {pen_dihapus}. Mutasi sapinya terlebih dahulu.")
+                        else:
+                            with st.spinner("⏳ Menghapus pen dari database..."):
+                                df_pen_db = df_pen_db[~((df_pen_db["Blok"] == b_hapus) & (df_pen_db["Pen"] == p_hapus))]
+                                write_df_to_sheet("master_pen", df_pen_db, ["Blok", "Pen"])
+                            add_activity_log(user_name, "Hapus Master Pen", f"Menghapus Pen: {pen_dihapus}")
+                            st.success(f"🗑️ Lokasi Pen **{pen_dihapus}** sukses dihapus dari database.")
+                            st.rerun()
+            else:
+                st.info("💡 Centang opsi saklar di atas untuk membuka koneksi data master pen langsung dari Supabase.")

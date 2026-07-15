@@ -2,9 +2,20 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-def tampilkan_menu_timbangan_truk(df_truk, save_truk_data, add_activity_log, user_name):
+def tampilkan_menu_timbangan_truk(add_activity_log, user_name, read_sheet_to_df, write_df_to_sheet):
     st.subheader("🚛 Timbangan Armada Truk (Logistik & Manifest)")
     st.markdown("Pencatatan berat jembatan timbang untuk kontrol armada logistik dan manifestasi muatan sapi.")
+
+    # Definisi kolom tabel jembatan timbang
+    cols_truk = [
+        "No Transaksi", "Tanggal", "Nama Lokasi Penimbangan", "No Plat / Armada", 
+        "Keterangan Muatan", "Bruto / Kotor (kg)", "Tara / Kosong (kg)", 
+        "Netto / Bersih (kg)", "Jumlah Sapi (Ekor)", "Daftar RFID/EarTag", 
+        "Rata-rata / Ekor (kg)", "Operator Lapangan"
+    ]
+    
+    # [LAZY LOADING] Menarik data hanya saat menu ini aktif dibuka oleh user
+    df_truk = read_sheet_to_df("timbangan_truk", cols_truk)
 
     with st.form("form_timbangan_truk", clear_on_submit=True):
         col1, col2 = st.columns(2)
@@ -25,14 +36,14 @@ def tampilkan_menu_timbangan_truk(df_truk, save_truk_data, add_activity_log, use
             
             # --- INTEGRASI TOTAL OPSI STATUS MUATAN (LAMA + BARU) ---
             opsi_muatan = [
-                "Sapi Masuk (Bongkar/Unloading dari Luar)",          # Pilihan Lama
-                "Sapi Keluar (Muat/Loading Penjualan)",            # Pilihan Lama
-                "sapi kedatangan (pelabuhan dalam negeri)",         # Pilihan Baru Pelabuhan
-                "sapi keberangkatan (pelabuhan negara asal)",       # Pilihan Baru Pelabuhan
-                "Mutasi Antar Blok (Internal)",                     # Pilihan Lama
-                "Pakan Ternak / Konsentrat / Hijauan",              # Logistik
-                "Logistik Umum / Muatan Lain",                      # Logistik
-                "Lain-lain"                                         # Pilihan Lama
+                "Sapi Masuk (Bongkar/Unloading dari Luar)",
+                "Sapi Keluar (Muat/Loading Penjualan)",
+                "sapi kedatangan (pelabuhan dalam negeri)",
+                "sapi keberangkatan (pelabuhan negara asal)",
+                "Mutasi Antar Blok (Internal)",
+                "Pakan Ternak / Konsentrat / Hijauan",
+                "Logistik Umum / Muatan Lain",
+                "Lain-lain"
             ]
             keterangan_muatan = st.selectbox("Keterangan Status Muatan", opsi_muatan)
 
@@ -89,9 +100,9 @@ def tampilkan_menu_timbangan_truk(df_truk, save_truk_data, add_activity_log, use
                 "Operator Lapangan": user_name
             }
 
-            # Gabungkan dan simpan ke cloud / local
+            # Gabungkan dan simpan langsung menggunakan fungsi database utama
             df_baru = pd.concat([df_truk, pd.DataFrame([new_truk_row])], ignore_index=True)
-            save_truk_data(df_baru)
+            write_df_to_sheet("timbangan_truk", df_baru, cols_truk)
 
             # Catat log audit aktivitas
             add_activity_log(user_name, "Timbangan Truk", f"Mencatat {keterangan_muatan} armada {no_plat} di {lokasi_timbang}")
@@ -103,7 +114,6 @@ def tampilkan_menu_timbangan_truk(df_truk, save_truk_data, add_activity_log, use
     # Tampilkan Tabel Riwayat Historis Logistik
     st.markdown("### 📜 Riwayat Catatan Timbangan Armada Truk")
     if not df_truk.empty:
-        # Tampilkan urutan dari data transaksi terbaru
         st.dataframe(df_truk.sort_values(by="Tanggal", ascending=False), use_container_width=True, hide_index=True)
     else:
         st.info("Belum ada riwayat timbangan truk yang tercatat di sistem.")

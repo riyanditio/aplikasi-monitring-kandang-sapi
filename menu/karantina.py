@@ -6,9 +6,8 @@ def tampilkan_menu_karantina(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_
     st.subheader("🏥 Manajemen Karantina & Rekam Medis")
     st.markdown("Fokus pemantauan intensif, pemberian obat/vaksin, dan evaluasi *biosecurity* sapi sebelum masuk masa penggemukan utama.")
 
-    # Inisialisasi Database Medis
+    # Skema kolom untuk database rekam medis
     COLS_MEDIS = ["Tanggal", "Kode Sapi", "RFID/Tag", "Suhu Tubuh (°C)", "Kondisi Klinis", "Tindakan Medis", "Catatan", "Operator"]
-    df_medis = read_sheet_to_df("riwayat_medis_karantina", COLS_MEDIS)
 
     # Hanya menyaring sapi yang lokasinya mengandung kata "Karantina" atau "Isolasi"
     mask_karantina = df_sapi["Lokasi Pen"].str.contains("Karantina|Isolasi", case=False, na=False)
@@ -123,8 +122,11 @@ def tampilkan_menu_karantina(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_
                             "Operator": user_name
                         }
                         
-                        df_medis = pd.concat([df_medis, pd.DataFrame([row_medis])], ignore_index=True)
-                        write_df_to_sheet("riwayat_medis_karantina", df_medis, COLS_MEDIS)
+                        with st.spinner("⏳ Mengamankan data rekam medis ke database..."):
+                            # [OPTIMASI 1]: Ambil riwayat medis HANYA saat tombol Simpan diklik
+                            df_medis = read_sheet_to_df("riwayat_medis_karantina", COLS_MEDIS)
+                            df_medis = pd.concat([df_medis, pd.DataFrame([row_medis])], ignore_index=True)
+                            write_df_to_sheet("riwayat_medis_karantina", df_medis, COLS_MEDIS)
                         
                         add_activity_log(user_name, "Rekam Medis", f"Input kondisi {kondisi} & tindakan {row_medis['Tindakan Medis']} untuk sapi {kode_asli}")
                         st.success(f"✅ Rekam medis untuk sapi {kode_asli} berhasil disimpan.")
@@ -155,7 +157,6 @@ def tampilkan_menu_karantina(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_
             full_tujuan = f"{blok_tujuan} - {pen_tujuan}"
             
             if st.button("🚀 Mutasikan Keluar Karantina", type="primary", use_container_width=True):
-                # Cek Kapasitas Pen 25 Ekor
                 sapi_di_pen_tujuan = len(df_sapi[df_sapi["Lokasi Pen"] == full_tujuan])
                 if sapi_di_pen_tujuan >= 25:
                     st.error(f"❌ Pen **{full_tujuan}** sudah penuh (Maks 25 ekor). Silakan pilih pen lain.")
@@ -173,6 +174,9 @@ def tampilkan_menu_karantina(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_
     with tab3:
         st.markdown("### ⚙️ Koreksi Rekam Medis")
         is_admin = str(user_role).lower() == "admin"
+        
+        # [OPTIMASI 2]: Ambil riwayat medis HANYA jika tab Edit/Hapus dibuka
+        df_medis = read_sheet_to_df("riwayat_medis_karantina", COLS_MEDIS)
         
         if df_medis.empty:
             st.info("Belum ada data rekam medis.")
@@ -198,8 +202,9 @@ def tampilkan_menu_karantina(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_
                 if not is_admin and pwd_hapus != correct_admin_pwd:
                     st.error("❌ Gagal! Password Admin salah.")
                 else:
-                    df_medis = df_medis.drop(index=idx_edit).reset_index(drop=True)
-                    write_df_to_sheet("riwayat_medis_karantina", df_medis, COLS_MEDIS)
+                    with st.spinner("🔄 Menghapus rekam medis dari database..."):
+                        df_medis = df_medis.drop(index=idx_edit).reset_index(drop=True)
+                        write_df_to_sheet("riwayat_medis_karantina", df_medis, COLS_MEDIS)
                     add_activity_log(user_name, "Hapus Medis", f"Menghapus riwayat medis karantina sapi {row_edit['Kode Sapi']}")
                     st.success("✅ Data rekam medis berhasil dihapus.")
                     st.rerun()
@@ -207,6 +212,10 @@ def tampilkan_menu_karantina(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_
     # ==================== TAB 4: RIWAYAT MEDIS ====================
     with tab4:
         st.markdown("### 📜 Buku Rekam Medis Karantina Sapi")
+        
+        # [OPTIMASI 3]: Ambil riwayat medis HANYA jika tab Riwayat dibuka
+        df_medis = read_sheet_to_df("riwayat_medis_karantina", COLS_MEDIS)
+        
         if df_medis.empty:
             st.info("Belum ada data rekam medis yang tersimpan.")
         else:
