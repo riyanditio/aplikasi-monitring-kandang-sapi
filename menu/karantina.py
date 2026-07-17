@@ -80,8 +80,24 @@ def tampilkan_menu_karantina(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_
         if df_sapi_karantina.empty:
             st.info("ℹ️ Saat ini tidak ada sapi yang berada di pen Karantina atau Isolasi.")
         else:
-            opsi_sapi = df_sapi_karantina.apply(lambda r: f"{r['Kode Sapi']} - RFID: {r['RFID/Tag']} (di {r['Lokasi Pen']})", axis=1).tolist()
-            sapi_terpilih = st.selectbox("Pilih Sapi Target:", opsi_sapi)
+            # Pilihan mode input terpusat
+            mode_input = st.radio(
+                "Pilih Mode Input Tindakan:",
+                ["Per Sapi Individual", "Massal Per Pen Karantina"],
+                horizontal=True
+            )
+            
+            # Filter Target Sapi Berdasarkan Pilihan Mode
+            if mode_input == "Per Sapi Individual":
+                opsi_sapi = df_sapi_karantina.apply(lambda r: f"{r['Kode Sapi']} - RFID: {r['RFID/Tag']} (di {r['Lokasi Pen']})", axis=1).tolist()
+                sapi_terpilih = st.selectbox("Pilih Sapi Target:", opsi_sapi)
+            else:
+                opsi_pen = df_sapi_karantina["Lokasi Pen"].dropna().unique().tolist()
+                pen_terpilih = st.selectbox("Pilih Pen Karantina Target (Massal):", opsi_pen)
+                
+                # Menghitung jumlah sapi di dalam pen terpilih untuk konfirmasi operator
+                jml_sapi_target = len(df_sapi_karantina[df_sapi_karantina["Lokasi Pen"] == pen_terpilih])
+                st.info(f"📢 **Rencana Tindakan Massal:** Tindakan medis akan otomatis diterapkan secara SERENTAK ke seluruh **{jml_sapi_target} ekor sapi** di **{pen_terpilih}**.")
             
             with st.form("form_medis", clear_on_submit=True):
                 col1, col2 = st.columns(2)
@@ -108,29 +124,48 @@ def tampilkan_menu_karantina(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_
                     if not tindakan:
                         st.error("❌ Tindakan medis wajib diisi (Pilih minimal 'Lainnya').")
                     else:
-                        kode_asli = sapi_terpilih.split(" - RFID: ")[0]
-                        rfid_asli = sapi_terpilih.split(" - RFID: ")[1].split(" (di ")[0]
+                        # 1. Tentukan target sapi yang akan di-looping
+                        if mode_input == "Per Sapi Individual":
+                            kode_asli = sapi_terpilih.split(" - RFID: ")[0]
+                            rfid_asli = sapi_terpilih.split(" - RFID: ")[1].split(" (di ")[0]
+                            df_target = df_sapi_karantina[(df_sapi_karantina["Kode Sapi"] == kode_asli) & (df_sapi_karantina["RFID/Tag"] == rfid_asli)]
+                        else:
+                            df_target = df_sapi_karantina[df_sapi_karantina["Lokasi Pen"] == pen_terpilih]
                         
-                        row_medis = {
-                            "Tanggal": tgl_medis.strftime("%Y-%m-%d"),
-                            "Kode Sapi": kode_asli,
-                            "RFID/Tag": rfid_asli,
-                            "Suhu Tubuh (°C)": float(suhu),
-                            "Kondisi Klinis": kondisi,
-                            "Tindakan Medis": ", ".join(tindakan),
-                            "Catatan": catatan if catatan else "-",
-                            "Operator": user_name
-                        }
-                        
-                        with st.spinner("⏳ Mengamankan data rekam medis ke database..."):
-                            # [OPTIMASI 1]: Ambil riwayat medis HANYA saat tombol Simpan diklik
-                            df_medis = read_sheet_to_df("riwayat_medis_karantina", COLS_MEDIS)
-                            df_medis = pd.concat([df_medis, pd.DataFrame([row_medis])], ignore_index=True)
-                            write_df_to_sheet("riwayat_medis_karantina", df_medis, COLS_MEDIS)
-                        
-                        add_activity_log(user_name, "Rekam Medis", f"Input kondisi {kondisi} & tindakan {row_medis['Tindakan Medis']} untuk sapi {kode_asli}")
-                        st.success(f"✅ Rekam medis untuk sapi {kode_asli} berhasil disimpan.")
-                        st.rerun()
+                        if df_target.empty:
+                            st.error("❌ Gagal Simpan! Tidak ada data sapi yang terdeteksi.")
+                        else:
+                            # 2. Susun data record baru (bisa single maupun multiple rows)
+                            new_records = []
+                            for _, r in df_target.iterrows():
+                                new_records.append({
+                                    "Tanggal": tgl_medis.strftime("%Y-%m-%d"),
+                                    "Kode Sapi": r["Kode Sapi"],
+                                    "RFID/Tag": r["RFID/Tag"],
+                                    "Suhu Tubuh (°C)": float(suhu),
+                                    "Kondisi Klinis": kondisi,
+                                    "Tindakan Medis": ", ".join(tindakan),
+                                    "Catatan": catatan if catatan else "-",
+                                    "Operator": user_name
+                                })
+                            
+                            # 3. Masukkan data sekaligus ke database Supabase via Dataframe Concat
+                            with st.spinner("⏳ Mengamankan data rekam medis ke database..."):
+                                df_medis = read_sheet_to_df("riwayat_medis_karantina", COLS_MEDIS)
+                                df_medis = pd.concat([df_medis, pd.DataFrame(new_records)], ignore_index=True)
+                                write_df_to_sheet("riwayat_medis_karantina", df_medis, COLS_MEDIS)
+                            
+                            # 4. Pengondisian Pesan Sukses & Log Audit
+                            tindakan_str = ", ".join(tindakan)
+                            if mode_input == "Per Sapi Individual":
+                                log_msg = f"Input kondisi {kondisi} & tindakan {tindakan_str} untuk sapi {df_target.iloc[0]['Kode Sapi']}"
+                                st.success(f"✅ Rekam medis untuk sapi {df_target.iloc[0]['Kode Sapi']} berhasil disimpan.")
+                            else:
+                                log_msg = f"Input kondisi massal {kondisi} & tindakan {tindakan_str} untuk {len(new_records)} sapi di {pen_terpilih}"
+                                st.success(f"✅ Rekam medis massal untuk {len(new_records)} ekor sapi di {pen_terpilih} berhasil disimpan.")
+                                
+                            add_activity_log(user_name, "Rekam Medis", log_msg)
+                            st.rerun()
 
     # ==================== TAB 2: MUTASI LULUS KARANTINA ====================
     with tab2:
