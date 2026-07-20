@@ -178,3 +178,30 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
                 )
             else:
                 st.write("*Belum ada riwayat pakan yang nempel tercatat untuk sapi ini.*")
+
+        # ==================== INTEGRASI BARU: RIWAYAT KARANTINA & MEDIS ====================
+        st.markdown("---")
+        st.markdown("🏥 **Riwayat Karantina & Rekam Medis (Karantina / Pen Isolasi)**")
+        
+        COLS_MEDIS = ["Tanggal", "Kode Sapi", "RFID/Tag", "Suhu Tubuh (°C)", "Kondisi Klinis", "Tindakan Medis", "Catatan", "Operator"]
+        df_medis_all = read_sheet_to_df("riwayat_medis_karantina", COLS_MEDIS)
+        
+        # Filter riwayat medis khusus untuk sapi ini berdasarkan Kode Sapi atau RFID/Tag
+        if not df_medis_all.empty:
+            df_medis_sapi = df_medis_all[
+                (df_medis_all["Kode Sapi"].astype(str) == str(kode_cari)) | 
+                (df_medis_all["RFID/Tag"].astype(str) == str(rfid_cari))
+            ].copy()
+        else:
+            df_medis_sapi = pd.DataFrame()
+
+        if not df_medis_sapi.empty:
+            st.warning(f"⚠️ Sapi ini memiliki **{len(df_medis_sapi)} catatan** riwayat penanganan medis/karantina.")
+            st.dataframe(
+                df_medis_sapi[["Tanggal", "Suhu Tubuh (°C)", "Kondisi Klinis", "Tindakan Medis", "Catatan", "Operator"]].sort_values("Tanggal", ascending=False),
+                use_container_width=True,
+                hide_index=True,
+                column_config={"Suhu Tubuh (°C)": st.column_config.NumberColumn(format="%.1f")}
+            )
+        else:
+            st.success("🟢 **Status Kesehatan:** Sapi dalam keadaan sehat / Tidak pernah memiliki riwayat sakit & tindakan medis.")
