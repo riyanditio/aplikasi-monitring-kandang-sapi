@@ -167,21 +167,37 @@ def tampilkan_menu_karantina(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_
                             add_activity_log(user_name, "Rekam Medis", log_msg)
                             st.rerun()
 
-    # ==================== TAB 2: MUTASI LULUS KARANTINA ====================
+    # ==================== TAB 2: MUTASI LULUS KARANTINA (MASSAL & SELEKTIF) ====================
     with tab2:
         st.markdown("### 🚪 Rilis Sapi ke Pen Penggemukan")
-        st.markdown("Gunakan menu ini jika masa observasi karantina sudah selesai dan sapi siap digemukkan.")
+        st.markdown("Gunakan menu ini untuk memindahkan sapi dari Pen Karantina/Isolasi ke Pen Penggemukan secara massal maupun selektif.")
         
         if df_sapi_karantina.empty:
             st.info("ℹ️ Tidak ada sapi di Pen Karantina yang siap di-mutasi.")
         else:
-            opsi_mutasi = df_sapi_karantina.apply(lambda r: f"{r['Kode Sapi']} - RFID: {r['RFID/Tag']} (Lokasi: {r['Lokasi Pen']})", axis=1).tolist()
-            sapi_mutasi = st.selectbox("Pilih Sapi yang Lulus Karantina:", opsi_mutasi)
+            # 1. Pilih Pen Asal Karantina
+            daftar_pen_karantina = df_sapi_karantina["Lokasi Pen"].dropna().unique().tolist()
+            pen_asal = st.selectbox("Pilih Pen Karantina Asal:", daftar_pen_karantina)
             
-            kode_m = sapi_mutasi.split(" - RFID: ")[0]
-            rfid_m = sapi_mutasi.split(" - RFID: ")[1].split(" (Lokasi:")[0]
-            lokasi_awal = sapi_mutasi.split("(Lokasi: ")[1].replace(")", "")
+            # Filter sapi di pen asal tersebut
+            df_sapi_pen_asal = df_sapi_karantina[df_sapi_karantina["Lokasi Pen"] == pen_asal]
             
+            st.markdown("---")
+            st.markdown(f"#### 🐄 Daftar Sapi di **{pen_asal}** ({len(df_sapi_pen_asal)} Ekor)")
+            
+            # 2. Pilihan Sapi yang Lulus (Default: Semua Sapi Terpilih untuk Massal)
+            opsi_sapi_pen = df_sapi_pen_asal.apply(lambda r: f"{r['Kode Sapi']} - RFID: {r['RFID/Tag']}", axis=1).tolist()
+            
+            sapi_terpilih_list = st.multiselect(
+                "Pilih Sapi yang Lulus Karantina (Centang Semua = Mutasi Massal):",
+                options=opsi_sapi_pen,
+                default=opsi_sapi_pen,
+                help="Secara otomatis semua sapi di pen ini tercentang. Hilangkan centang pada sapi tertentu jika belum lulus/masih butuh karantina."
+            )
+            
+            st.caption(f"📊 **Status Terpilih:** {len(sapi_terpilih_list)} dari {len(df_sapi_pen_asal)} ekor sapi akan dipindahkan.")
+            
+            st.markdown("---")
             st.markdown("#### 🎯 Pilih Pen Penggemukan Tujuan")
             c_mut1, c_mut2 = st.columns(2)
             with c_mut1:
@@ -191,17 +207,36 @@ def tampilkan_menu_karantina(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_
                 
             full_tujuan = f"{blok_tujuan} - {pen_tujuan}"
             
-            if st.button("🚀 Mutasikan Keluar Karantina", type="primary", use_container_width=True):
-                sapi_di_pen_tujuan = len(df_sapi[df_sapi["Lokasi Pen"] == full_tujuan])
-                if sapi_di_pen_tujuan >= 25:
-                    st.error(f"❌ Pen **{full_tujuan}** sudah penuh (Maks 25 ekor). Silakan pilih pen lain.")
+            # 3. Cek Kapasitas Pen Tujuan
+            sapi_di_pen_tujuan = len(df_sapi[df_sapi["Lokasi Pen"] == full_tujuan])
+            sisa_kapasitas = 25 - sapi_di_pen_tujuan
+            
+            if sapi_di_pen_tujuan >= 25:
+                st.error(f"⚠️ Pen **{full_tujuan}** sudah PENUH ({sapi_di_pen_tujuan}/25 Ekor). Silakan pilih pen lain.")
+            else:
+                st.info(f"ℹ️ Pen **{full_tujuan}** saat ini terisi {sapi_di_pen_tujuan}/25 Ekor. Sisa kapasitas: **{sisa_kapasitas} ekor**.")
+            
+            # 4. Tombol Eksekusi Mutasi
+            if st.button("🚀 Mutasikan Sapi Terpilih Keluar Karantina", type="primary", use_container_width=True):
+                if not sapi_terpilih_list:
+                    st.error("❌ Gagal! Pilih minimal 1 ekor sapi yang akan dimutasi.")
+                elif len(sapi_terpilih_list) > sisa_kapasitas:
+                    st.error(f"❌ Gagal! Kapasitas pen tujuan tidak cukup. Anda memilih {len(sapi_terpilih_list)} ekor, tetapi sisa kapasitas pen {full_tujuan} hanya {sisa_kapasitas} ekor.")
                 else:
-                    mask = (df_sapi["Kode Sapi"] == kode_m) & (df_sapi["RFID/Tag"] == rfid_m)
-                    df_sapi.loc[mask, "Lokasi Pen"] = full_tujuan
+                    # Eksekusi pemindahan lokasi sapi
+                    for item in sapi_terpilih_list:
+                        kode_m = item.split(" - RFID: ")[0]
+                        rfid_m = item.split(" - RFID: ")[1]
+                        
+                        mask = (df_sapi["Kode Sapi"] == kode_m) & (df_sapi["RFID/Tag"] == rfid_m)
+                        df_sapi.loc[mask, "Lokasi Pen"] = full_tujuan
+                    
                     save_data(df_sapi)
                     
-                    add_activity_log(user_name, "Lulus Karantina", f"Sapi {kode_m} lulus karantina. Pindah dari {lokasi_awal} ke {full_tujuan}")
-                    st.success(f"🎉 Selamat! Sapi {kode_m} telah resmi lulus fase karantina dan dipindahkan ke {full_tujuan}.")
+                    log_msg = f"Mutasi lulus karantina {len(sapi_terpilih_list)} ekor sapi dari {pen_asal} ke {full_tujuan}"
+                    add_activity_log(user_name, "Lulus Karantina", log_msg)
+                    
+                    st.success(f"🎉 Selamat! Sebanyak {len(sapi_terpilih_list)} ekor sapi dari {pen_asal} telah resmi lulus fase karantina dan dipindahkan ke {full_tujuan}.")
                     st.balloons()
                     st.rerun()
 
