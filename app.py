@@ -39,6 +39,18 @@ DB_MAPPING = {
     "log_aktivitas": {
         "columns": {"Tanggal & Waktu": "tanggal_waktu", "Operator": "operator", "Aktivitas": "aktivitas", "Detail Keterangan": "detail_keterangan"}
     },
+    # Pemetaan Tabel Rahasia Audit IP & Perangkat
+    "audit_ip_logs": {
+        "columns": {
+            "Tanggal & Waktu": "tanggal_waktu", 
+            "Operator": "operator", 
+            "Aktivitas": "aktivitas", 
+            "Detail Keterangan": "detail_keterangan",
+            "IP Address": "ip_address",
+            "Perangkat": "perangkat",
+            "User Agent": "user_agent"
+        }
+    },
     "users": {
         "columns": {"Username": "username", "Password": "password", "Role": "role", "Menus": "menus"}
     },
@@ -227,47 +239,50 @@ ALL_MENUS = [
 ]
 DEFAULT_JENIS_SAPI = ["Brahman Cross", "Simental", "Limosin", "Hereford", "Sapi Lokal (Bali)", "Sapi Lokal (Madura)", "Sapi Lokal (PO/Peranakan Ongole)", "Ex Impor"]
 
-# --- [INTEGRASI BARU: FITUR TRACKER IP & PERANGKAT PADA LOG] ---
+# --- [OPSI 2: LOG GANDA (LOG UMUM UNTUK USER & LOG RAHASIA KHUSUS SUPABASE)] ---
 def add_activity_log(operator, aktivitas, detail):
-    cols = ["Tanggal & Waktu", "Operator", "Aktivitas", "Detail Keterangan"]
     waktu_wib = datetime.now(timezone(timedelta(hours=7))).strftime("%Y-%m-%d %H:%M:%S")
     
-    # 1. Ambil IP asli dan Info Perangkat dari header Streamlit
+    # 1. Simpan Log Umum (Bersih) untuk Tampilan Operator di Aplikasi Web
+    cols_umum = ["Tanggal & Waktu", "Operator", "Aktivitas", "Detail Keterangan"]
+    df_log_umum = pd.DataFrame([{
+        "Tanggal & Waktu": waktu_wib, 
+        "Operator": operator, 
+        "Aktivitas": aktivitas, 
+        "Detail Keterangan": detail
+    }])
+    append_df_to_db("log_aktivitas", df_log_umum, cols_umum)
+
+    # 2. Simpan Log Rahasia (IP + Perangkat) Khusus di Tabel Supabase audit_ip_logs
     try:
         headers = st.context.headers
-        
-        # Mengambil IP asli (Streamlit Cloud mengirimkannya lewat 'X-Forwarded-For')
         ip_address = headers.get("X-Forwarded-For", "Localhost")
         if ip_address and "," in ip_address:
-            # Jika melewati beberapa proxy, ambil IP pertama (IP asli user)
             ip_address = ip_address.split(",")[0].strip()
             
-        # Mengambil info tipe HP / Browser / Laptop
         user_agent = headers.get("User-Agent", "Perangkat Tidak Dikenal")
         
-        # Sederhanakan info perangkat agar tidak terlalu panjang di tabel
         if any(keyword in user_agent for keyword in ["Mobi", "Android", "iPhone", "iPad"]):
             info_perangkat = "📱 Mobile"
         else:
             info_perangkat = "💻 Desktop"
-            
     except Exception:
-        # Cadangan jika dijalankan di lokal/offline yang tidak mendukung header cloud
         ip_address = "127.0.0.1 (Lokal)"
         info_perangkat = "💻 Localhost"
         user_agent = "Browser Lokal"
 
-    # 2. Gabungkan IP & Perangkat ke dalam variabel Detail (Tanpa ubah kolom Supabase!)
-    detail_lengkap = f"{detail} | [{ip_address} - {info_perangkat}] ({user_agent})"
-    
-    # 3. Masukkan ke dataframe log dan kirim ke database
-    df_new_log = pd.DataFrame([{
-        "Tanggal & Waktu": waktu_wib, 
-        "Operator": operator, 
-        "Aktivitas": aktivitas, 
-        "Detail Keterangan": detail_lengkap
+    cols_rahasia = ["Tanggal & Waktu", "Operator", "Aktivitas", "Detail Keterangan", "IP Address", "Perangkat", "User Agent"]
+    df_log_rahasia = pd.DataFrame([{
+        "Tanggal & Waktu": waktu_wib,
+        "Operator": operator,
+        "Aktivitas": aktivitas,
+        "Detail Keterangan": detail,
+        "IP Address": ip_address,
+        "Perangkat": info_perangkat,
+        "User Agent": user_agent
     }])
-    append_df_to_db("log_aktivitas", df_new_log, cols)
+    
+    append_df_to_db("audit_ip_logs", df_log_rahasia, cols_rahasia)
 
 def load_users():
     cols = ["Username", "Password", "Role", "Menus"]
@@ -378,7 +393,6 @@ else:
 
     with st.spinner("⏳ Menyelaraskan koneksi cloud... Sedang mengunduh seluruh database master kandang terbaru..."):
         df_sapi = load_data()
-        # [DIUBAH] Penarikan df_panen and df_truk dihapus dari sini agar aplikasi menjadi ringan & realtime cepat!
         LIST_JENIS_SAPI = load_jenis_sapi()
         
         df_pen_master = load_master_pen()
@@ -395,7 +409,6 @@ else:
     if menu == "📊 Dashboard & Tabel Monitor":
         tampilkan_dashboard(df_sapi, read_sheet_to_df)
     elif menu == "🚛 Timbangan Armada Truk":
-        # [DIUBAH] Mengirimkan fungsi database connector (lazy loading)
         tampilkan_menu_timbangan_truk(add_activity_log, user_name, read_sheet_to_df, write_df_to_sheet)
     elif menu == "🐂 Kelola Master Jenis Sapi":
         tampilkan_menu_jenis_sapi(LIST_JENIS_SAPI, save_jenis_sapi, add_activity_log, user_name)
@@ -414,7 +427,6 @@ else:
     elif menu == "📈 Analisis & Grafik Performa":
         tampilkan_menu_analisis_grafik(df_sapi, DAFTAR_PEN)
     elif menu == "💰 Manajemen Panen & Penjualan":
-        # [DIUBAH] Mengirimkan fungsi database connector (lazy loading)
         tampilkan_menu_panen_penjualan(df_sapi, save_data, add_activity_log, user_name, read_sheet_to_df, write_df_to_sheet)
     elif menu == "⚙️ Edit & Hapus Data":
         tampilkan_menu_edit_hapus(df_sapi, LIST_JENIS_SAPI, DAFTAR_PEN, save_data, add_activity_log, user_name)
