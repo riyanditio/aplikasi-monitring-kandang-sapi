@@ -36,10 +36,7 @@ def get_db_engine():
 
 # Kamus Pemetaan Kolom Otomatis (App <=> Supabase Database)
 DB_MAPPING = {
-    "log_aktivitas": {
-        "columns": {"Tanggal & Waktu": "tanggal_waktu", "Operator": "operator", "Aktivitas": "aktivitas", "Detail Keterangan": "detail_keterangan"}
-    },
-    # Pemetaan Tabel Rahasia Audit IP & Perangkat
+    # Tabel Tunggal Audit Log (Menghemat Kapasitas & Lebih Cepat)
     "audit_ip_logs": {
         "columns": {
             "Tanggal & Waktu": "tanggal_waktu", 
@@ -242,21 +239,11 @@ ALL_MENUS = [
 ]
 DEFAULT_JENIS_SAPI = ["Brahman Cross", "Simental", "Limosin", "Hereford", "Sapi Lokal (Bali)", "Sapi Lokal (Madura)", "Sapi Lokal (PO/Peranakan Ongole)", "Ex Impor"]
 
-# --- [OPSI 2: LOG GANDA (LOG UMUM UNTUK USER & LOG RAHASIA KHUSUS SUPABASE)] ---
+# --- [EFEKTIF: HANYA SIMPAN 1 KALI KE TABEL AUDIT_IP_LOGS] ---
 def add_activity_log(operator, aktivitas, detail):
     waktu_wib = datetime.now(timezone(timedelta(hours=7))).strftime("%Y-%m-%d %H:%M:%S")
     
-    # 1. Simpan Log Umum (Bersih) untuk Tampilan Operator di Aplikasi Web
-    cols_umum = ["Tanggal & Waktu", "Operator", "Aktivitas", "Detail Keterangan"]
-    df_log_umum = pd.DataFrame([{
-        "Tanggal & Waktu": waktu_wib, 
-        "Operator": operator, 
-        "Aktivitas": aktivitas, 
-        "Detail Keterangan": detail
-    }])
-    append_df_to_db("log_aktivitas", df_log_umum, cols_umum)
-
-    # 2. Simpan Log Rahasia (IP + Perangkat) Khusus di Tabel Supabase audit_ip_logs
+    # Ambil IP asli dan Info Perangkat dari header Streamlit
     try:
         headers = st.context.headers
         ip_address = headers.get("X-Forwarded-For", "Localhost")
