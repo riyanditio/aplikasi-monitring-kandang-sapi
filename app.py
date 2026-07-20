@@ -141,7 +141,9 @@ def write_df_to_sheet(worksheet_name, df, default_cols):
     with st.spinner(f"💾 Sinkronisasi {worksheet_name.replace('_', ' ')} ke Supabase..."):
         df = df.reindex(columns=default_cols).fillna("")
         df.to_csv(f"{worksheet_name}.csv", index=False) 
-        if not engine: return
+        if not engine:
+            st.warning(f"⚠️ Koneksi Supabase offline/terputus. Data {worksheet_name} disimpan sementara di file CSV lokal.")
+            return
         try:
             df_db = df.copy()
             if worksheet_name in DB_MAPPING:
@@ -192,6 +194,7 @@ def append_df_to_db(worksheet_name, df_new_records, default_cols):
         df_db.to_csv(csv_file, mode='a', header=not file_exists, index=False)
         
         if not engine: 
+            st.warning(f"⚠️ Koneksi Supabase offline/terputus. Log {worksheet_name} disimpan sementara di file CSV lokal.")
             return
         try:
             if worksheet_name in DB_MAPPING:
