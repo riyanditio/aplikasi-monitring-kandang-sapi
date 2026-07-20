@@ -179,7 +179,7 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
             else:
                 st.write("*Belum ada riwayat pakan yang nempel tercatat untuk sapi ini.*")
 
-        # ==================== INTEGRASI BARU: RIWAYAT KARANTINA & MEDIS ====================
+        # ==================== INTEGRASI BARU: RIWAYAT KARANTINA & MEDIS (SMART STATUS) ====================
         st.markdown("---")
         st.markdown("🏥 **Riwayat Karantina & Rekam Medis (Karantina / Pen Isolasi)**")
         
@@ -196,7 +196,15 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
             df_medis_sapi = pd.DataFrame()
 
         if not df_medis_sapi.empty:
-            st.warning(f"⚠️ Sapi ini memiliki **{len(df_medis_sapi)} catatan** riwayat penanganan medis/karantina.")
+            # Saring apakah sapi PERNAH mengalami indikasi sakit / pemulihan
+            mask_sakit = df_medis_sapi["Kondisi Klinis"].astype(str).str.contains("Sakit|Lesu|Pemulihan", case=False, na=False)
+            df_pernah_sakit = df_medis_sapi[mask_sakit]
+
+            if not df_pernah_sakit.empty:
+                st.warning(f"⚠️ **Peringatan Riwayat Kesehatan:** Sapi ini pernah mengalami kondisi sakit / penanganan khusus ({len(df_pernah_sakit)} kali dari total {len(df_medis_sapi)} rekam medis).")
+            else:
+                st.success(f"🟢 **Status Kesehatan Prima:** Sapi selalu dalam kondisi sehat/normal. (Memiliki {len(df_medis_sapi)} catatan tindakan pencegahan rutin seperti vaksin/vitamin).")
+
             st.dataframe(
                 df_medis_sapi[["Tanggal", "Suhu Tubuh (°C)", "Kondisi Klinis", "Tindakan Medis", "Catatan", "Operator"]].sort_values("Tanggal", ascending=False),
                 use_container_width=True,
@@ -204,4 +212,4 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
                 column_config={"Suhu Tubuh (°C)": st.column_config.NumberColumn(format="%.1f")}
             )
         else:
-            st.success("🟢 **Status Kesehatan:** Sapi dalam keadaan sehat / Tidak pernah memiliki riwayat sakit & tindakan medis.")
+            st.success("🟢 **Status Kesehatan Prima:** Sapi dalam keadaan sehat / Tidak pernah ada catatan medis.")
