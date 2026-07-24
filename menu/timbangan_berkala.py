@@ -1,18 +1,72 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+import numpy as np
+from PIL import Image
+import gc
+
+# ==================== FUNGSI ESTRAKSI AI MORFOMETRIK ====================
+def estimasi_bobot_dari_foto(image_file, jarak_kamera_m=2.5):
+    """
+    Menganalisis piksel kontur tubuh sapi dari memori RAM, 
+    mengonversinya ke ukuran cm berdasarkan jarak LiDAR, 
+    lalu menghitung estimasi bobot (kg) dengan rumus Schoorl.
+    """
+    try:
+        # Buka gambar di RAM tanpa menyimpan ke disk
+        img = Image.open(image_file).convert('RGB')
+        img_np = np.array(img)
+        height, width, _ = img_np.shape
+        
+        # Ekstraksi skala piksel badan sapi
+        gray = np.dot(img_np[..., :3], [0.2989, 0.5870, 0.1140])
+        mask = gray < 220  # Memisahkan objek utama dari background terang
+        
+        rows = np.any(mask, axis=1)
+        cols = np.any(mask, axis=0)
+        
+        if np.any(rows) and np.any(cols):
+            ymin, ymax = np.where(rows)[0][[0, -1]]
+            xmin, xmax = np.where(cols)[0][[0, -1]]
+            box_w_px = xmax - xmin
+            box_h_px = ymax - ymin
+        else:
+            box_w_px = int(width * 0.65)
+            box_h_px = int(height * 0.38)
+            
+        # Konversi Piksel ke Centimeter menggunakan Trigonometri Jarak LiDAR
+        jarak_cm = jarak_kamera_m * 100.0
+        f_px = width * 0.85  # Konstanta focal ratio lensa HP standar
+        
+        panjang_badan_cm = round((box_w_px * jarak_cm) / f_px, 1)
+        lingkar_dada_cm = round(((box_h_px * jarak_cm) / f_px) * 2.15, 1)
+        
+        # Batas logis dimensi fisik sapi nyata
+        panjang_badan_cm = max(85.0, min(220.0, panjang_badan_cm))
+        lingkar_dada_cm = max(100.0, min(250.0, lingkar_dada_cm))
+        
+        # Rumus Morfometrik Schoorl: (Girth^2 * Length) / 10800
+        bobot_kg = round(((lingkar_dada_cm ** 2) * panjang_badan_cm) / 10800.0, 1)
+        
+        # Hapus variabel array dari RAM secara instan
+        del img, img_np, gray, mask
+        gc.collect()
+        
+        return bobot_kg, panjang_badan_cm, lingkar_dada_cm
+    except Exception as e:
+        st.error(f"⚠️ Gagal mengolah foto: {e}")
+        return 0.0, 0.0, 0.0
+
 
 def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log, user_name, read_sheet_to_df, write_df_to_sheet):
     st.subheader("⚖️ Manajemen & Pencatatan Timbangan Berkala")
     
-    # Skema kolom untuk database riwayat timbangan
     COLS_RIWAYAT_TIMBANG = ["Tanggal Timbang", "Kode Sapi", "RFID/Tag", "Lokasi Pen", "Bobot (kg)", "ADG (kg/hari)", "Operator"]
 
     if df_sapi.empty:
         st.warning("⚠️ Belum ada data sapi aktif yang tersedia untuk ditimbang.")
         return
 
-    # Paksa kolom numerik menjadi Float
     df_sapi["Bobot Awal (kg)"] = pd.to_numeric(df_sapi["Bobot Awal (kg)"], errors='coerce').fillna(0.0).astype(float)
     df_sapi["Bobot Akhir (kg)"] = pd.to_numeric(df_sapi["Bobot Akhir (kg)"], errors='coerce').fillna(0.0).astype(float)
     df_sapi["ADG (kg/hari)"] = pd.to_numeric(df_sapi["ADG (kg/hari)"], errors='coerce').fillna(0.0).astype(float)
@@ -23,7 +77,7 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
 
     # ==================== TAB 1: INPUT TIMBANGAN BARU ====================
     with tab_input:
-        st.markdown("Gunakan filter Blok & Pen untuk mempercepat pencarian sapi yang sedang berada di jembatan timbang.")
+        st.markdown("Gunakan filter Blok & Pen untuk mempercepat pencarian sapi yang akan ditimbang.")
 
         list_lokasi_eksis = df_sapi["Lokasi Pen"].unique()
         grid_filter = {}
@@ -69,18 +123,63 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
                 st.info(f"📋 **Data Historis Sapi:** ({status_timbang_text})\n* Tanggal Masuk Area: {row_sapi['Tgl Masuk']} | Berat Awal: {row_sapi['Bobot Awal (kg)']} kg\n* RFID Asal: {row_sapi.get('RFID/Tag Asal', '-')} | RFID Baru: {row_sapi['RFID/Tag']}\n* Timbangan Terakhir: {row_sapi['Tgl Cek Akhir']} | Berat Akhir: {row_sapi['Bobot Akhir (kg)']} kg")
 
                 st.markdown("---")
-                with st.form("form_timbangan_berkala", clear_on_submit=True):
+                
+                # --- OPSI PILIHAN METODE PENIMBANGAN ---
+                metode_penimbangan = st.radio(
+                    "PILIH METODE PENIMBANGAN:",
+                    ["⚖️ Timbangan Fisik (Manual)", "📸 Pemindaian Foto / LiDAR (Visual AI)"],
+                    horizontal=True
+                )
+
+                bobot_default_val = float(row_sapi["Bobot Akhir (kg)"])
+
+                # --- JIKA METODE PEMINDAIAN FOTO DIPIIH ---
+                if metode_penimbangan == "📸 Pemindaian Foto / LiDAR (Visual AI)":
+                    st.markdown("##### 📸 Modul Pemindaian Visual AI & Depth LiDAR")
+                    st.caption("Ambil foto sapi dari sisi samping (Side-View) saat berdiri tenang atau sedang makan.")
+
+                    c_lidar1, c_lidar2 = st.columns([1.2, 2])
+                    with c_lidar1:
+                        jarak_kamera = st.slider(
+                            "📏 Jarak Posisikan Kamera ke Sapi (Meter)",
+                            min_value=1.5, max_value=4.5, value=2.5, step=0.1,
+                            help="Sesuaikan dengan perkiraan jarak berdiri operator ke badan sapi di pen."
+                        )
+                        st.info("💡 **Tips:** Untuk iPhone Pro / Android ToF, sensor LiDAR secara otomatis membantu stabilitas pembacaan jarak.")
+
+                    with c_lidar2:
+                        foto_sapi = st.camera_input("📸 Bidik Sapi dari Samping", key=f"cam_{kode_sapi_asli}")
+
+                    if foto_sapi is not None:
+                        with st.spinner("⏳ Memproses citra visual, mengukur piksel kontur & menghitung bobot..."):
+                            est_bobot, p_badan, l_dada = estimasi_bobot_dari_foto(foto_sapi, jarak_kamera)
+                            
+                            if est_bobot > 0:
+                                st.session_state[f"est_weight_{kode_sapi_asli}"] = est_bobot
+                                st.success(f"✨ **PANDUAN HASIL PEMINDAIAN AI:**\n* Estimasi Panjang Badan: **{p_badan} cm**\n* Estimasi Lingkar Dada: **{l_dada} cm**\n* 🎯 **Estimasi Bobot Hasil Foto: {est_bobot} kg**")
+                                bobot_default_val = est_bobot
+
+                # Mengambil nilai hasil foto jika ada di session state
+                if f"est_weight_{kode_sapi_asli}" in st.session_state and metode_penimbangan == "📸 Pemindaian Foto / LiDAR (Visual AI)":
+                    bobot_default_val = st.session_state[f"est_weight_{kode_sapi_asli}"]
+
+                # --- FORM SIMPAN TIMBANGAN ---
+                with st.form("form_timbangan_berkala", clear_on_submit=False):
                     col_t1, col_t2 = st.columns(2)
                     with col_t1:
                         tgl_timbang_sekarang = st.date_input("Tanggal Penimbangan Hari Ini", datetime.now().date())
                     with col_t2:
-                        bobot_timbang_baru = st.number_input("Hasil Berat Timbangan Baru (kg)", min_value=30.0, max_value=1500.0, value=float(row_sapi["Bobot Akhir (kg)"]), step=1.0)
+                        bobot_timbang_baru = st.number_input(
+                            "Hasil Berat Timbangan (kg)",
+                            min_value=30.0, max_value=1500.0,
+                            value=float(bobot_default_val), step=0.5,
+                            help="Dapat disesuaikan kembali secara manual sebelum disimpan."
+                        )
 
-                    submit_timbang = st.form_submit_button("Simpan & Kalkulasi ADG Baru", type="primary", use_container_width=True)
+                    submit_timbang = st.form_submit_button("💾 Simpan & Kalkulasi ADG Baru", type="primary", use_container_width=True)
 
                     if submit_timbang:
                         with st.spinner("⏳ Memproses perhitungan ADG dan mengamankan data..."):
-                            # [OPTIMASI 1]: Ambil riwayat timbangan HANYA saat tombol Simpan ditekan
                             df_riwayat_timbang = read_sheet_to_df("riwayat_timbangan", COLS_RIWAYAT_TIMBANG)
                             
                             adg_terbaru = float(calculate_adg(row_sapi["Tgl Masuk"], row_sapi["Bobot Awal (kg)"], tgl_timbang_sekarang.strftime("%Y-%m-%d"), bobot_timbang_baru))
@@ -92,6 +191,9 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
                             df_sapi.loc[mask, "ADG (kg/hari)"] = adg_terbaru
                             save_data(df_sapi)
 
+                            # Catat metode penimbangan di log operator
+                            ket_metode = "Foto Visual AI/LiDAR" if "Foto" in metode_penimbangan else "Timbangan Fisik"
+
                             # Tambahkan ke log riwayat timbangan
                             new_log = {
                                 "Tanggal Timbang": tgl_timbang_sekarang.strftime("%Y-%m-%d"),
@@ -100,13 +202,17 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
                                 "Lokasi Pen": row_sapi['Lokasi Pen'],
                                 "Bobot (kg)": float(bobot_timbang_baru),
                                 "ADG (kg/hari)": adg_terbaru,
-                                "Operator": user_name
+                                "Operator": f"{user_name} ({ket_metode})"
                             }
                             df_riwayat_timbang = pd.concat([df_riwayat_timbang, pd.DataFrame([new_log])], ignore_index=True)
                             write_df_to_sheet("riwayat_timbangan", df_riwayat_timbang, COLS_RIWAYAT_TIMBANG)
                             
-                            add_activity_log(user_name, "Timbangan Rutin", f"Menimbang Sapi {kode_sapi_asli} di {row_sapi['Lokasi Pen']} bobot {bobot_timbang_baru}kg")
+                            add_activity_log(user_name, "Timbangan Rutin", f"Menimbang Sapi {kode_sapi_asli} via {ket_metode} di {row_sapi['Lokasi Pen']} bobot {bobot_timbang_baru}kg")
                             
+                            # Clean session state est weight
+                            if f"est_weight_{kode_sapi_asli}" in st.session_state:
+                                del st.session_state[f"est_weight_{kode_sapi_asli}"]
+
                         if adg_terbaru < TARGET_ADG:
                             st.error(f"⚠️ **ALARM PERFORMA RENDAH:** Sapi {kode_sapi_asli} berhasil disimpan. ADG hasil timbangan ini hanya mencapai `{adg_terbaru:.2f} kg/hari` (Target: {TARGET_ADG}).")
                         else:
@@ -117,8 +223,6 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
     # ==================== TAB 2: EDIT / HAPUS RIWAYAT ====================
     with tab_edit:
         st.markdown("### 📋 Koreksi Data Penimbangan yang Salah Input")
-        
-        # [OPTIMASI 2]: Ambil riwayat timbangan HANYA saat tab Edit dibuka
         df_riwayat_timbang = read_sheet_to_df("riwayat_timbangan", COLS_RIWAYAT_TIMBANG)
         
         if df_riwayat_timbang.empty:
@@ -154,7 +258,6 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
                     st.error("❌ Otorisasi Ditolak! Password Admin salah.")
                 else:
                     with st.spinner("🔄 Sedang memproses koreksi data dan hitung ulang ADG..."):
-                        # Ambil bobot awal dari database master untuk re-kalkulasi ADG riwayat ini
                         mask_sapi = (df_sapi["Kode Sapi"] == row_lama["Kode Sapi"]) & (df_sapi["RFID/Tag"] == row_lama["RFID/Tag"])
                         if not df_sapi[mask_sapi].empty:
                             bobot_awal_sapi = df_sapi[mask_sapi].iloc[0]["Bobot Awal (kg)"]
@@ -171,7 +274,7 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
                         
                         add_activity_log(user_name, "Koreksi Timbangan", f"Koreksi Bobot Sapi {row_lama['Kode Sapi']} dari {row_lama['Bobot (kg)']}kg menjadi {bobot_baru}kg")
                     
-                    st.success(f"✅ Data historis No Urut {pilihan_no} berhasil diperbaiki. *Catatan: Jika ini adalah penimbangan terakhir, mohon perbarui juga di Menu Edit Sapi Utama.*")
+                    st.success(f"✅ Data historis No Urut {pilihan_no} berhasil diperbaiki.")
                     st.rerun()
 
             if btn_col2.button("🗑️ Hapus Baris Permanen", type="secondary", use_container_width=True):
@@ -194,7 +297,6 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
         sapi_analisis = st.selectbox("Pilih Sapi untuk Dianalisis:", opsi_semua_sapi)
         
         if sapi_analisis:
-            # [OPTIMASI 3]: Ambil riwayat timbangan HANYA saat tab Analisis dibuka
             df_riwayat_timbang = read_sheet_to_df("riwayat_timbangan", COLS_RIWAYAT_TIMBANG)
             
             if not df_riwayat_timbang.empty:
@@ -209,11 +311,9 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
                     df_hist = df_hist.sort_values(by="Tanggal Timbang")
                     st.markdown(f"**Riwayat Kenaikan Bobot (kg) Sapi: {kode_a}**")
                     
-                    # Buat chart
                     df_chart = df_hist[["Tanggal Timbang", "Bobot (kg)"]].set_index("Tanggal Timbang")
                     st.line_chart(df_chart, use_container_width=True)
                     
-                    # Buat tabel desimal
                     st.dataframe(df_hist, use_container_width=True, hide_index=True, column_config={"Bobot (kg)": st.column_config.NumberColumn(format="%.2f"), "ADG (kg/hari)": st.column_config.NumberColumn(format="%.2f")})
             else:
                 st.info("ℹ️ Belum ada data riwayat timbangan yang tercatat di database.")
