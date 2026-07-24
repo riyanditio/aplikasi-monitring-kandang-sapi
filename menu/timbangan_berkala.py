@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import gc
 
-# ==================== FUNGSI ESTRAKSI AI MORFOMETRIK & ANOTASI VISUAL ====================
+# ==================== FUNGSI EKSTRAKSI AI MORFOMETRIK & ANOTASI VISUAL ====================
 def estimasi_bobot_dari_foto(image_file, jarak_kamera_m=2.5):
     """
     Menganalisis piksel kontur tubuh sapi dari memori RAM, 
@@ -158,33 +158,84 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
                     st.markdown("##### 📸 Modul Pemindaian Visual AI & Depth LiDAR")
                     st.caption("Ambil foto sapi dari sisi samping (Side-View) saat berdiri tenang atau sedang makan.")
 
-                    # Inject CSS Garis Panduan Overlay Kamera
+                    # Inject CSS & JS: Pindahkan Tombol Switch ke Luar Bingkai & Prioritaskan Kamera Belakang (LiDAR)
                     st.markdown("""
                     <style>
+                    /* Container Bingkai Kamera */
                     div[data-testid="stCameraInput"] {
-                        position: relative;
-                        border: 2px dashed #00FF66;
-                        border-radius: 12px;
-                        padding: 4px;
+                        position: relative !important;
+                        border: 2px dashed #00FF66 !important;
+                        border-radius: 12px !important;
+                        padding: 4px !important;
+                        margin-top: 40px !important;
                     }
+                    
+                    /* Pindahkan Tombol Switch / Flip Kamera ke Luar Bingkai (Kanan Atas) */
+                    div[data-testid="stCameraInput"] button[aria-label*="Switch"],
+                    div[data-testid="stCameraInput"] button[aria-label*="camera"],
+                    div[data-testid="stCameraInput"] button[aria-label*="Kamera"],
+                    div[data-testid="stCameraInput"] > div > div > button {
+                        position: absolute !important;
+                        top: -45px !important;
+                        right: 0px !important;
+                        background: #0F172A !important;
+                        color: #00FF66 !important;
+                        border: 1px solid #00FF66 !important;
+                        border-radius: 8px !important;
+                        padding: 4px 12px !important;
+                        z-index: 9999 !important;
+                        box-shadow: 0px 2px 8px rgba(0,0,0,0.5) !important;
+                    }
+
+                    /* Banner Indikator Kamera Belakang / LiDAR */
                     div[data-testid="stCameraInput"]::before {
-                        content: "📱 POSISI HP: HORIZONTAL (LANSKAP) | KANVAS BINGKAI PRESISI AI";
+                        content: "📷 PRIORITAS: KAMERA BELAKANG / LIDAR | POSISI HP HORIZONTAL";
                         position: absolute;
-                        top: 10px;
-                        left: 50%;
-                        transform: translateX(-50%);
-                        background: rgba(0, 0, 0, 0.85);
+                        top: -42px;
+                        left: 0px;
+                        background: rgba(15, 23, 42, 0.95);
                         color: #00FF66;
-                        padding: 6px 14px;
-                        border-radius: 20px;
+                        padding: 5px 12px;
+                        border-radius: 8px;
                         font-size: 11px;
                         font-weight: bold;
                         z-index: 99;
                         pointer-events: none;
                         border: 1px solid #00FF66;
-                        box-shadow: 0 0 10px rgba(0,255,102,0.5);
+                        box-shadow: 0 0 10px rgba(0,255,102,0.3);
                     }
                     </style>
+
+                    <script>
+                    // Otomatis Deteksi & Berpindah ke Kamera Belakang (Environment) Jika Membuka Kamera Depan secara Default
+                    function autoSwitchToRearCamera() {
+                        const cameraDiv = document.querySelector('div[data-testid="stCameraInput"]');
+                        if (cameraDiv) {
+                            const videoEl = cameraDiv.querySelector('video');
+                            const switchBtn = cameraDiv.querySelector('button[aria-label*="Switch"], button[aria-label*="camera"], button[aria-label*="Kamera"]');
+                            
+                            if (videoEl && !videoEl.dataset.rearCheckDone) {
+                                videoEl.dataset.rearCheckDone = "true";
+                                if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+                                    navigator.mediaDevices.enumerateDevices().then(devices => {
+                                        const videoInputs = devices.filter(d => d.kind === 'videoinput');
+                                        if (videoInputs.length > 1 && switchBtn) {
+                                            const streamTrack = videoEl.srcObject ? videoEl.srcObject.getVideoTracks()[0] : null;
+                                            if (streamTrack) {
+                                                const settings = streamTrack.getSettings();
+                                                // Jika kamera aktif masih kamera depan (user), klik tombol switch otomatis
+                                                if (settings.facingMode === 'user' || (settings.label && settings.label.toLowerCase().includes('front'))) {
+                                                    switchBtn.click();
+                                                }
+                                            }
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                    }
+                    setInterval(autoSwitchToRearCamera, 1200);
+                    </script>
                     """, unsafe_allow_html=True)
 
                     c_lidar1, c_lidar2 = st.columns([1.2, 2])
