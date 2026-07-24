@@ -2,14 +2,15 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import gc
 
-# ==================== FUNGSI ESTRAKSI AI MORFOMETRIK ====================
+# ==================== FUNGSI ESTRAKSI AI MORFOMETRIK & ANOTASI VISUAL ====================
 def estimasi_bobot_dari_foto(image_file, jarak_kamera_m=2.5):
     """
     Menganalisis piksel kontur tubuh sapi dari memori RAM, 
     mengonversinya ke ukuran cm berdasarkan jarak LiDAR, 
+    menggambar garis ukur visual (Bounding Box),
     lalu menghitung estimasi bobot (kg) dengan rumus Schoorl.
     """
     try:
@@ -33,6 +34,10 @@ def estimasi_bobot_dari_foto(image_file, jarak_kamera_m=2.5):
         else:
             box_w_px = int(width * 0.65)
             box_h_px = int(height * 0.38)
+            xmin = int(width * 0.17)
+            xmax = xmin + box_w_px
+            ymin = int(height * 0.3)
+            ymax = ymin + box_h_px
             
         # Konversi Piksel ke Centimeter menggunakan Trigonometri Jarak LiDAR
         jarak_cm = jarak_kamera_m * 100.0
@@ -48,14 +53,29 @@ def estimasi_bobot_dari_foto(image_file, jarak_kamera_m=2.5):
         # Rumus Morfometrik Schoorl: (Girth^2 * Length) / 10800
         bobot_kg = round(((lingkar_dada_cm ** 2) * panjang_badan_cm) / 10800.0, 1)
         
-        # Hapus variabel array dari RAM secara instan
+        # --- GAMBAR GARIS PANDUAN VISUAL PADA HASIL FOTO ---
+        img_annotated = img.copy()
+        draw = ImageDraw.Draw(img_annotated)
+        
+        # 1. Kotak Hijau Batas Tubuh Sapi (Bounding Box)
+        draw.rectangle([xmin, ymin, xmax, ymax], outline="#00FF66", width=4)
+        
+        # 2. Garis Kuning Horizontal (Panjang Badan)
+        y_mid = ymin + int(box_h_px * 0.5)
+        draw.line([xmin, y_mid, xmax, y_mid], fill="#FFD700", width=4)
+        
+        # 3. Garis Sian Vertikal (Lingkar Dada)
+        x_girth = xmin + int(box_w_px * 0.35)
+        draw.line([x_girth, ymin, x_girth, ymax], fill="#00E5FF", width=4)
+        
+        # Hapus variabel array yang tidak terpakai dari RAM
         del img, img_np, gray, mask
         gc.collect()
         
-        return bobot_kg, panjang_badan_cm, lingkar_dada_cm
+        return bobot_kg, panjang_badan_cm, lingkar_dada_cm, img_annotated
     except Exception as e:
         st.error(f"⚠️ Gagal mengolah foto: {e}")
-        return 0.0, 0.0, 0.0
+        return 0.0, 0.0, 0.0, None
 
 
 def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log, user_name, read_sheet_to_df, write_df_to_sheet):
@@ -138,6 +158,35 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
                     st.markdown("##### 📸 Modul Pemindaian Visual AI & Depth LiDAR")
                     st.caption("Ambil foto sapi dari sisi samping (Side-View) saat berdiri tenang atau sedang makan.")
 
+                    # Inject CSS Garis Panduan Overlay Kamera
+                    st.markdown("""
+                    <style>
+                    div[data-testid="stCameraInput"] {
+                        position: relative;
+                        border: 2px dashed #00FF66;
+                        border-radius: 12px;
+                        padding: 4px;
+                    }
+                    div[data-testid="stCameraInput"]::before {
+                        content: "📱 POSISI HP: HORIZONTAL (LANSKAP) | KANVAS BINGKAI PRESISI AI";
+                        position: absolute;
+                        top: 10px;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        background: rgba(0, 0, 0, 0.85);
+                        color: #00FF66;
+                        padding: 6px 14px;
+                        border-radius: 20px;
+                        font-size: 11px;
+                        font-weight: bold;
+                        z-index: 99;
+                        pointer-events: none;
+                        border: 1px solid #00FF66;
+                        box-shadow: 0 0 10px rgba(0,255,102,0.5);
+                    }
+                    </style>
+                    """, unsafe_allow_html=True)
+
                     c_lidar1, c_lidar2 = st.columns([1.2, 2])
                     with c_lidar1:
                         jarak_kamera = st.slider(
@@ -152,11 +201,16 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
 
                     if foto_sapi is not None:
                         with st.spinner("⏳ Memproses citra visual, mengukur piksel kontur & menghitung bobot..."):
-                            est_bobot, p_badan, l_dada = estimasi_bobot_dari_foto(foto_sapi, jarak_kamera)
+                            est_bobot, p_badan, l_dada, img_hasil = estimasi_bobot_dari_foto(foto_sapi, jarak_kamera)
                             
                             if est_bobot > 0:
                                 st.session_state[f"est_weight_{kode_sapi_asli}"] = est_bobot
+                                
                                 st.success(f"✨ **PANDUAN HASIL PEMINDAIAN AI:**\n* Estimasi Panjang Badan: **{p_badan} cm**\n* Estimasi Lingkar Dada: **{l_dada} cm**\n* 🎯 **Estimasi Bobot Hasil Foto: {est_bobot} kg**")
+                                
+                                if img_hasil is not None:
+                                    st.image(img_hasil, caption="🔍 Hasil Deteksi AI: Kotak Hijau (Batas Sapi) | Garis Kuning (Panjang Badan) | Garis Sian (Lingkar Dada)", use_container_width=True)
+                                
                                 bobot_default_val = est_bobot
 
                 # Mengambil nilai hasil foto jika ada di session state
