@@ -36,7 +36,6 @@ def get_db_engine():
 
 # Kamus Pemetaan Kolom Otomatis (App <=> Supabase Database)
 DB_MAPPING = {
-    # Tabel Tunggal Audit Log (Menghemat Kapasitas & Lebih Cepat)
     "audit_ip_logs": {
         "columns": {
             "Tanggal & Waktu": "tanggal_waktu", 
@@ -239,11 +238,9 @@ ALL_MENUS = [
 ]
 DEFAULT_JENIS_SAPI = ["Brahman Cross", "Simental", "Limosin", "Hereford", "Sapi Lokal (Bali)", "Sapi Lokal (Madura)", "Sapi Lokal (PO/Peranakan Ongole)", "Ex Impor"]
 
-# --- [EFEKTIF: HANYA SIMPAN 1 KALI KE TABEL AUDIT_IP_LOGS] ---
 def add_activity_log(operator, aktivitas, detail):
     waktu_wib = datetime.now(timezone(timedelta(hours=7))).strftime("%Y-%m-%d %H:%M:%S")
     
-    # Ambil IP asli dan Info Perangkat dari header Streamlit
     try:
         headers = st.context.headers
         ip_address = headers.get("X-Forwarded-For", "Localhost")
@@ -369,17 +366,26 @@ else:
     raw_user_menus = st.session_state.get("allowed_menus", [ALL_MENUS[0]])
     daftar_menu_user = [m for m in ALL_MENUS if m in raw_user_menus]
 
+    # ==================== HEADER APLIKASI KIRI ATAS & POPUP PROFIL ====================
+    col_nav, col_space, col_user_popup = st.columns([2.5, 1, 1], gap="small")
+
+    with col_nav:
+        menu = st.selectbox("📌 PILIH MENU APLIKASI", daftar_menu_user, label_visibility="collapsed")
+
+    with col_user_popup:
+        # Tombol Pop-up Profil Admin/Operator & Logout
+        with st.popover(f"👤 {user_name.upper()} ({user_role})", use_container_width=True):
+            st.markdown("### 📋 Profil Operator")
+            st.markdown(f"**Username:** {user_name.upper()}")
+            st.markdown(f"**Role Access:** {user_role}")
+            st.markdown("---")
+            if st.button("🚪 Keluar (Logout)", type="primary", use_container_width=True):
+                add_activity_log(user_name, "Logout", "Keluar dari sistem.")
+                st.session_state.clear()
+                st.query_params.clear()
+                st.rerun()
+
     st.title("🐂 Sistem Monitoring Penggemukan Sapi Impor & Lokal")
-    st.sidebar.info(f"**User:** {user_name.upper()}\n\n**Hak Akses:** {user_role}")
-    
-    if st.sidebar.button("🚪 Keluar (Logout)", type="secondary", use_container_width=True):
-        add_activity_log(user_name, "Logout", "Keluar dari sistem.")
-        st.session_state.clear()
-        st.query_params.clear()
-        st.rerun()
-        
-    st.sidebar.markdown("---")
-    menu = st.sidebar.selectbox("PILIH MENU APLIKASI", daftar_menu_user)
 
     with st.spinner("⏳ Menyelaraskan koneksi cloud... Sedang mengunduh seluruh database master kandang terbaru..."):
         df_sapi = load_data()
