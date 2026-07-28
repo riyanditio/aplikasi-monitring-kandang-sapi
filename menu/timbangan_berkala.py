@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 import gc
 
 # ==================== FUNGSI EKSTRAKSI AI MORFOMETRIK & ANOTASI VISUAL ====================
@@ -156,85 +156,99 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
                 # --- JIKA METODE PEMINDAIAN FOTO DIPIIH ---
                 if metode_penimbangan == "📸 Pemindaian Foto / LiDAR (Visual AI)":
                     st.markdown("##### 📸 Modul Pemindaian Visual AI & Depth LiDAR")
-                    st.caption("Ambil foto sapi dari sisi samping (Side-View) saat berdiri tenang atau sedang makan.")
+                    st.caption("📱 **Penting:** Pegang HP dalam posisi **Horizontal (Landscape)**. Kamera Utama / Belakang akan otomatis diaktifkan.")
 
-                    # Inject CSS & JS: Pindahkan Tombol Switch ke Luar Bingkai & Prioritaskan Kamera Belakang (LiDAR)
+                    # Inject CSS & JS Perbaikan Kamera Landscape & Auto Rear Camera
                     st.markdown("""
                     <style>
-                    /* Container Bingkai Kamera */
+                    /* Bingkai Kamera Utama */
                     div[data-testid="stCameraInput"] {
                         position: relative !important;
                         border: 2px dashed #00FF66 !important;
                         border-radius: 12px !important;
-                        padding: 4px !important;
-                        margin-top: 40px !important;
+                        padding: 6px !important;
+                        background: #000000 !important;
+                        overflow: visible !important;
                     }
-                    
-                    /* Pindahkan Tombol Switch / Flip Kamera ke Luar Bingkai (Kanan Atas) */
+
+                    /* Pastikan container tidak memotong elemen tombol di mode landscape */
+                    div[data-testid="stCameraInput"] * {
+                        overflow: visible !important;
+                    }
+
+                    /* Tombol Switch / Flip Kamera Diatur Terlihat Jelas di Pojok Kanan Atas Dalam Kamera */
                     div[data-testid="stCameraInput"] button[aria-label*="Switch"],
                     div[data-testid="stCameraInput"] button[aria-label*="camera"],
                     div[data-testid="stCameraInput"] button[aria-label*="Kamera"],
-                    div[data-testid="stCameraInput"] > div > div > button {
+                    div[data-testid="stCameraInput"] button[title*="Switch"],
+                    div[data-testid="stCameraInput"] button[title*="camera"] {
                         position: absolute !important;
-                        top: -45px !important;
-                        right: 0px !important;
-                        background: #0F172A !important;
+                        top: 12px !important;
+                        right: 12px !important;
+                        z-index: 999999 !important;
+                        background-color: rgba(15, 23, 42, 0.9) !important;
                         color: #00FF66 !important;
-                        border: 1px solid #00FF66 !important;
-                        border-radius: 8px !important;
-                        padding: 4px 12px !important;
-                        z-index: 9999 !important;
-                        box-shadow: 0px 2px 8px rgba(0,0,0,0.5) !important;
+                        border: 2px solid #00FF66 !important;
+                        border-radius: 50% !important;
+                        width: 50px !important;
+                        height: 50px !important;
+                        display: flex !important;
+                        align-items: center !important;
+                        justify-content: center !important;
+                        box-shadow: 0px 4px 12px rgba(0,255,102,0.6) !important;
+                        cursor: pointer !important;
                     }
 
-                    /* Banner Indikator Kamera Belakang / LiDAR */
-                    div[data-testid="stCameraInput"]::before {
-                        content: "📷 PRIORITAS: KAMERA BELAKANG / LIDAR | POSISI HP HORIZONTAL";
-                        position: absolute;
-                        top: -42px;
-                        left: 0px;
-                        background: rgba(15, 23, 42, 0.95);
-                        color: #00FF66;
-                        padding: 5px 12px;
-                        border-radius: 8px;
-                        font-size: 11px;
-                        font-weight: bold;
-                        z-index: 99;
-                        pointer-events: none;
-                        border: 1px solid #00FF66;
-                        box-shadow: 0 0 10px rgba(0,255,102,0.3);
+                    div[data-testid="stCameraInput"] button svg {
+                        fill: #00FF66 !important;
+                        width: 26px !important;
+                        height: 26px !important;
                     }
                     </style>
 
                     <script>
-                    // Otomatis Deteksi & Berpindah ke Kamera Belakang (Environment) Jika Membuka Kamera Depan secara Default
-                    function autoSwitchToRearCamera() {
+                    // Skrip Otomatis Memaksa Pindah ke Kamera Belakang (Main Rear / LiDAR)
+                    let switchedToRear = false;
+
+                    function enforceRearCamera() {
+                        if (switchedToRear) return;
+
                         const cameraDiv = document.querySelector('div[data-testid="stCameraInput"]');
-                        if (cameraDiv) {
-                            const videoEl = cameraDiv.querySelector('video');
-                            const switchBtn = cameraDiv.querySelector('button[aria-label*="Switch"], button[aria-label*="camera"], button[aria-label*="Kamera"]');
-                            
-                            if (videoEl && !videoEl.dataset.rearCheckDone) {
-                                videoEl.dataset.rearCheckDone = "true";
-                                if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-                                    navigator.mediaDevices.enumerateDevices().then(devices => {
-                                        const videoInputs = devices.filter(d => d.kind === 'videoinput');
-                                        if (videoInputs.length > 1 && switchBtn) {
-                                            const streamTrack = videoEl.srcObject ? videoEl.srcObject.getVideoTracks()[0] : null;
-                                            if (streamTrack) {
-                                                const settings = streamTrack.getSettings();
-                                                // Jika kamera aktif masih kamera depan (user), klik tombol switch otomatis
-                                                if (settings.facingMode === 'user' || (settings.label && settings.label.toLowerCase().includes('front'))) {
-                                                    switchBtn.click();
-                                                }
-                                            }
-                                        }
-                                    });
+                        if (!cameraDiv) return;
+
+                        const videoEl = cameraDiv.querySelector('video');
+                        const buttons = Array.from(cameraDiv.querySelectorAll('button'));
+                        
+                        // Cari tombol flip/switch
+                        const switchBtn = buttons.find(b => {
+                            const lbl = (b.getAttribute('aria-label') || b.getAttribute('title') || '').toLowerCase();
+                            return lbl.includes('switch') || lbl.includes('camera') || lbl.includes('kamera') || b.querySelector('svg');
+                        });
+
+                        if (videoEl && videoEl.srcObject) {
+                            const tracks = videoEl.srcObject.getVideoTracks();
+                            if (tracks.length > 0) {
+                                const settings = tracks[0].getSettings();
+                                const label = (tracks[0].label || '').toLowerCase();
+                                const facing = settings.facingMode || '';
+
+                                // Jika masih menggunakan kamera depan/selfie, klik tombol switch otomatis!
+                                if (facing === 'user' || label.includes('front') || label.includes('selfie') || label.includes('depan')) {
+                                    if (switchBtn) {
+                                        switchBtn.click();
+                                        switchedToRear = true;
+                                    }
+                                } else if (facing === 'environment' || label.includes('back') || label.includes('rear') || label.includes('belakang')) {
+                                    switchedToRear = true;
                                 }
                             }
                         }
                     }
-                    setInterval(autoSwitchToRearCamera, 1200);
+
+                    const rearCheckInterval = setInterval(() => {
+                        enforceRearCamera();
+                        if (switchedToRear) clearInterval(rearCheckInterval);
+                    }, 600);
                     </script>
                     """, unsafe_allow_html=True)
 
