@@ -8,6 +8,9 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
         st.info("👋 Selamat Datang! Database kosong. Sapi baru belum ada yang terregistrasi masuk kandang.")
         return
 
+    # --- URUTKAN SELURUH DATA SAPI BERDASARKAN KODE SAPI (KODE TIBA) A-Z ---
+    df_sapi = df_sapi.sort_values(by="Kode Sapi", ascending=True).reset_index(drop=True)
+
     TARGET_ADG = 1.6
 
     df_sudah_timbang_berkala = df_sapi[df_sapi["Tgl Cek Akhir"].astype(str) != df_sapi["Tgl Masuk"].astype(str)].copy()
@@ -92,6 +95,8 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
             return [''] * len(row)
 
         df_monitor = df_sapi.drop(columns=['Blok Kandang']).copy()
+        # Memastikan tabel monitor tetap terurut secara eksplisit berdasarkan Kode Sapi
+        df_monitor = df_monitor.sort_values(by="Kode Sapi", ascending=True).reset_index(drop=True)
         df_monitor = df_monitor.rename(columns={"Kode Sapi": "Kode Tiba", "RFID/Tag": "RFID/Tag Kandang"})
         if "RFID/Tag Asal" not in df_monitor.columns: df_monitor["RFID/Tag Asal"] = "-"
         
@@ -146,10 +151,8 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
             
             target_id = f"{kode_cari} - {rfid_cari}"
             
-            # Kueri pencarian langsung berdasarkan ID Sapi yang menempel permanen
             df_kombinasi_pakan = df_r_pakan[df_r_pakan["Target Spesifik"] == target_id].copy()
             
-            # ANTISIPASI/FALLBACK: Jika ada data lama (legacy) yang formatnya masih nama pen
             df_legacy_serentak = df_r_pakan[(df_r_pakan["Metode"] == "Serentak") & (df_r_pakan["Lokasi Pen"] == info_sapi["Lokasi Pen"]) & (~df_r_pakan["Target Spesifik"].str.contains(" - ", na=False))].copy()
             
             if not df_legacy_serentak.empty:
@@ -179,14 +182,12 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
             else:
                 st.write("*Belum ada riwayat pakan yang nempel tercatat untuk sapi ini.*")
 
-        # ==================== INTEGRASI BARU: RIWAYAT KARANTINA & MEDIS (SMART STATUS) ====================
         st.markdown("---")
         st.markdown("🏥 **Riwayat Karantina & Rekam Medis (Karantina / Pen Isolasi)**")
         
         COLS_MEDIS = ["Tanggal", "Kode Sapi", "RFID/Tag", "Suhu Tubuh (°C)", "Kondisi Klinis", "Tindakan Medis", "Catatan", "Operator"]
         df_medis_all = read_sheet_to_df("riwayat_medis_karantina", COLS_MEDIS)
         
-        # Filter riwayat medis khusus untuk sapi ini berdasarkan Kode Sapi atau RFID/Tag
         if not df_medis_all.empty:
             df_medis_sapi = df_medis_all[
                 (df_medis_all["Kode Sapi"].astype(str) == str(kode_cari)) | 
@@ -196,7 +197,6 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
             df_medis_sapi = pd.DataFrame()
 
         if not df_medis_sapi.empty:
-            # Saring apakah sapi PERNAH mengalami indikasi sakit / pemulihan
             mask_sakit = df_medis_sapi["Kondisi Klinis"].astype(str).str.contains("Sakit|Lesu|Pemulihan", case=False, na=False)
             df_pernah_sakit = df_medis_sapi[mask_sakit]
 
