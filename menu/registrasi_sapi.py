@@ -79,6 +79,10 @@ def buat_template_excel(list_jenis_sapi, struktur_kandang):
 def tampilkan_menu_registrasi(df_sapi, list_jenis_sapi, struktur_kandang, save_data, add_activity_log, user_name, user_role="operator"):
     st.subheader("📝 Manajemen & Registrasi Sapi Baru")
     
+    # Inisialisasi Key Reset untuk File Uploader
+    if "uploader_key" not in st.session_state:
+        st.session_state["uploader_key"] = 0
+
     tab_registrasi, tab_edit_hapus = st.tabs(["➕ Registrasi Sapi Baru", "⚙️ Edit / Hapus Data Registrasi"])
 
     # ==================== TAB 1: FORM REGISTRASI ====================
@@ -189,9 +193,13 @@ def tampilkan_menu_registrasi(df_sapi, list_jenis_sapi, struktur_kandang, save_d
             )
 
             st.markdown("---")
-            # Langkah 2: Unggah File
+            # Langkah 2: Unggah File dengan Key Dinamis
             st.markdown("#### 2. Unggah File Excel Catatan Lapangan")
-            uploaded_file = st.file_uploader("Pilih file Excel (.xlsx / .xls / .csv) yang sudah diisi:", type=["xlsx", "xls", "csv"])
+            uploaded_file = st.file_uploader(
+                "Pilih file Excel (.xlsx / .xls / .csv) yang sudah diisi:", 
+                type=["xlsx", "xls", "csv"],
+                key=f"file_uploader_{st.session_state['uploader_key']}"
+            )
 
             if uploaded_file is not None:
                 try:
@@ -249,7 +257,6 @@ def tampilkan_menu_registrasi(df_sapi, list_jenis_sapi, struktur_kandang, save_d
                             err_msg.append(f"Blok Kandang '{blok_k}' tidak ditemukan di master")
                         else:
                             # --- CEK APAKAH DENGAN INSTRUKSI AUTO-PILOT PEN ---
-                            # Jika pen_k kosong, berisi '-', '--', 'nan', 'Otomatis', dll.
                             is_auto_pen = (
                                 not pen_k 
                                 or pen_k.lower() in ["nan", "none", "null", "otomatis", "auto"]
@@ -272,7 +279,6 @@ def tampilkan_menu_registrasi(df_sapi, list_jenis_sapi, struktur_kandang, save_d
                                 if not pen_terpilih:
                                     err_msg.append(f"Semua Pen di '{blok_k}' sudah penuh (Maksimal 25 ekor per Pen)")
                             else:
-                                # Jika diisi nama Pen spesifik secara manual di Excel
                                 if " - " in pen_k:
                                     lokasi_f = pen_k
                                 else:
@@ -332,8 +338,10 @@ def tampilkan_menu_registrasi(df_sapi, list_jenis_sapi, struktur_kandang, save_d
                                 df_baru_total = pd.concat([df_sapi, df_valid_only], ignore_index=True)
                                 save_data(df_baru_total)
                                 add_activity_log(user_name, "Registrasi Batch Excel", f"Mengunggah {len(df_valid_only)} ekor sapi baru via Excel")
-                            st.success(f"🎉 Berhasil mendaftarkan **{len(df_valid_only)} ekor sapi baru** sekaligus!")
-                            st.balloons()
+                            
+                            # RESET MEMORI FILE UPLOADER KETIKA SUKSES SIMPAN
+                            st.session_state["uploader_key"] += 1
+                            st.toast(f"🎉 Berhasil mendaftarkan {len(df_valid_only)} ekor sapi baru!", icon="🚀")
                             st.rerun()
                     else:
                         st.error("Tidak ada baris data yang valid untuk disimpan.")
