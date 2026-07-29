@@ -11,9 +11,8 @@ def buat_template_excel(list_jenis_sapi, struktur_kandang):
     """
     buffer = io.BytesIO()
     
-    # 1. Data Contoh untuk Sheet Input
+    # Data Contoh untuk Sheet Input
     blok_default = list(struktur_kandang.keys())[0] if struktur_kandang else "Blok Karantina"
-    pen_default = struktur_kandang[blok_default][0] if struktur_kandang else "Pen Karantina 1"
     jenis_default = list_jenis_sapi[0] if list_jenis_sapi else "Brahman Cross"
 
     sample_data = [
@@ -28,7 +27,7 @@ def buat_template_excel(list_jenis_sapi, struktur_kandang):
             "Tgl Masuk (YYYY-MM-DD)": datetime.now().strftime("%Y-%m-%d"),
             "Bobot Awal (kg)": 320.5,
             "Blok Kandang": blok_default,
-            "Nomor Pen": pen_default
+            "Nomor Pen": "-"  # Dikosongkan/Diisi '-' agar terisi otomatis
         },
         {
             "Kode Tiba / No Batch": "BATCH-01",
@@ -41,14 +40,14 @@ def buat_template_excel(list_jenis_sapi, struktur_kandang):
             "Tgl Masuk (YYYY-MM-DD)": datetime.now().strftime("%Y-%m-%d"),
             "Bobot Awal (kg)": 340.0,
             "Blok Kandang": blok_default,
-            "Nomor Pen": pen_default
+            "Nomor Pen": "-"  # Dikosongkan/Diisi '-' agar terisi otomatis
         }
     ]
     df_sample = pd.DataFrame(sample_data)
 
-    # 2. Data Panduan Pengisian untuk Sheet Panduan
+    # Data Panduan Pengisian untuk Sheet Panduan
     panduan_data = [
-        {"KOLOM": "Kode Tiba / No Batch", "ATURAN PENGISIAN": "WAJIB DIISEI. Boleh sama untuk satu kelompok/truk kedatangan (contoh: BATCH-01, S2, B05)."},
+        {"KOLOM": "Kode Tiba / No Batch", "ATURAN PENGISIAN": "WAJIB DIISI. Boleh sama untuk satu kelompok/truk kedatangan (contoh: BATCH-01, S2, B05)."},
         {"KOLOM": "RFID Asal", "ATURAN PENGISIAN": "OPSIONAL. Nomor RFID bawaan asal supplier. Isikan '-' jika tidak ada."},
         {"KOLOM": "RFID Kandang", "ATURAN PENGISIAN": "OPSIONAL. Nomor RFID internal kandang. HARUS UNIK (tidak boleh sama dengan sapi lain). Isikan '-' jika belum dipasang."},
         {"KOLOM": "Jenis Sapi", "ATURAN PENGISIAN": f"PILIH SALAH SATU DARI MASTER: {', '.join(list_jenis_sapi)}"},
@@ -58,7 +57,7 @@ def buat_template_excel(list_jenis_sapi, struktur_kandang):
         {"KOLOM": "Tgl Masuk (YYYY-MM-DD)", "ATURAN PENGISIAN": "Format tanggal: YYYY-MM-DD (contoh: 2026-07-29)."},
         {"KOLOM": "Bobot Awal (kg)", "ATURAN PENGISIAN": "Angka bobot timbangan awal masuk (contoh: 320.5)."},
         {"KOLOM": "Blok Kandang", "ATURAN PENGISIAN": f"HARUS SAMA PERSIS DENGAN MASTER BLOK: {', '.join(list(struktur_kandang.keys()))}"},
-        {"KOLOM": "Nomor Pen", "ATURAN PENGISIAN": "Harus sesuai Pen yang tersedia di dalam Blok tersebut (Maksimal 25 ekor per Pen)."}
+        {"KOLOM": "Nomor Pen", "ATURAN PENGISIAN": "BISA DIKOSONGKAN / ISI '-'. Sistem akan OTOMATIS membagikan sapi ke Pen yang masih berkuota (< 25 ekor) di Blok tersebut."}
     ]
     df_panduan = pd.DataFrame(panduan_data)
 
@@ -80,12 +79,10 @@ def buat_template_excel(list_jenis_sapi, struktur_kandang):
 def tampilkan_menu_registrasi(df_sapi, list_jenis_sapi, struktur_kandang, save_data, add_activity_log, user_name, user_role="operator"):
     st.subheader("📝 Manajemen & Registrasi Sapi Baru")
     
-    # Membuat 2 Tab utama
     tab_registrasi, tab_edit_hapus = st.tabs(["➕ Registrasi Sapi Baru", "⚙️ Edit / Hapus Data Registrasi"])
 
     # ==================== TAB 1: FORM REGISTRASI ====================
     with tab_registrasi:
-        # Sub-Tab Pilihan Metode Input
         sub_satuan, sub_excel = st.tabs(["📝 Form Input Satuan", "📥 Upload Batch File Excel"])
 
         # ------------------- SUB-TAB 1: INPUT SATUAN -------------------
@@ -214,7 +211,7 @@ def tampilkan_menu_registrasi(df_sapi, list_jenis_sapi, struktur_kandang, save_d
                     validation_errors = []
 
                     for idx, r in df_upload.iterrows():
-                        no_baris = idx + 2  # Sesuaikan dengan baris di Excel
+                        no_baris = idx + 2
                         
                         kode_t = str(r.get("Kode Tiba / No Batch", "")).strip()
                         rfid_a = str(r.get("RFID Asal", "-")).strip()
@@ -234,23 +231,47 @@ def tampilkan_menu_registrasi(df_sapi, list_jenis_sapi, struktur_kandang, save_d
                         except: bobot = 300.0
                         
                         blok_k = str(r.get("Blok Kandang", "")).strip()
-                        pen_k = str(r.get("Nomor Pen", "")).strip()
-                        lokasi_f = f"{blok_k} - {pen_k}" if blok_k and pen_k else "-"
-
-                        # Validasi Baris
+                        pen_k = str(r.get("Nomor Pen", "-")).strip()
+                        
                         err_msg = []
+                        lokasi_f = "-"
+
                         if not kode_t or kode_t == "nan":
                             err_msg.append("Kode Tiba kosong")
+
                         if rfid_k != "-" and rfid_k.lower() in rfid_eksis:
                             err_msg.append(f"RFID Kandang '{rfid_k}' sudah terdaftar")
-                        if blok_k not in struktur_kandang or pen_k not in struktur_kandang.get(blok_k, []):
-                            err_msg.append(f"Lokasi Pen '{lokasi_f}' tidak valid")
+
+                        if blok_k not in struktur_kandang:
+                            err_msg.append(f"Blok Kandang '{blok_k}' tidak ditemukan di master")
                         else:
-                            isi_pen = pen_counts.get(lokasi_f, 0)
-                            if isi_pen >= 25:
-                                err_msg.append(f"Pen '{lokasi_f}' penuh (25 ekor)")
+                            # --- FITUR AUTO-PILOT PEMBAGIAN PEN ---
+                            if pen_k in ["-", "nan", "None", "", "Otomatis"]:
+                                pen_terpilih = None
+                                list_pen_di_blok = struktur_kandang.get(blok_k, [])
+                                
+                                for p_cand in list_pen_di_blok:
+                                    cand_full = f"{blok_k} - {p_cand}"
+                                    isi_cand = pen_counts.get(cand_full, 0)
+                                    if isi_cand < 25:
+                                        pen_terpilih = p_cand
+                                        lokasi_f = cand_full
+                                        pen_counts[cand_full] = isi_cand + 1
+                                        break
+                                
+                                if not pen_terpilih:
+                                    err_msg.append(f"Semua Pen di '{blok_k}' sudah penuh (Maksimal 25 ekor per Pen)")
                             else:
-                                pen_counts[lokasi_f] = isi_pen + 1
+                                # Input Pen secara manual dari Excel
+                                lokasi_f = f"{blok_k} - {pen_k}"
+                                if pen_k not in struktur_kandang.get(blok_k, []):
+                                    err_msg.append(f"Nomor Pen '{pen_k}' tidak ada di {blok_k}")
+                                else:
+                                    isi_pen = pen_counts.get(lokasi_f, 0)
+                                    if isi_pen >= 25:
+                                        err_msg.append(f"Pen '{lokasi_f}' sudah penuh (25 ekor)")
+                                    else:
+                                        pen_counts[lokasi_f] = isi_pen + 1
 
                         status_str = "✅ SIAP SIMPAN" if not err_msg else f"❌ ERROR: {', '.join(err_msg)}"
                         
