@@ -231,12 +231,15 @@ def tampilkan_menu_registrasi(df_sapi, list_jenis_sapi, struktur_kandang, save_d
                         except: bobot = 300.0
                         
                         blok_k = str(r.get("Blok Kandang", "")).strip()
-                        pen_k = str(r.get("Nomor Pen", "-")).strip()
+                        
+                        # Ambil nilai mentah Nomor Pen
+                        raw_pen = r.get("Nomor Pen", r.get("Pen", ""))
+                        pen_k = "" if pd.isna(raw_pen) else str(raw_pen).strip()
                         
                         err_msg = []
                         lokasi_f = "-"
 
-                        if not kode_t or kode_t == "nan":
+                        if not kode_t or kode_t in ["nan", "None", ""]:
                             err_msg.append("Kode Tiba kosong")
 
                         if rfid_k != "-" and rfid_k.lower() in rfid_eksis:
@@ -245,8 +248,15 @@ def tampilkan_menu_registrasi(df_sapi, list_jenis_sapi, struktur_kandang, save_d
                         if blok_k not in struktur_kandang:
                             err_msg.append(f"Blok Kandang '{blok_k}' tidak ditemukan di master")
                         else:
-                            # --- FITUR AUTO-PILOT PEMBAGIAN PEN ---
-                            if pen_k in ["-", "nan", "None", "", "Otomatis"]:
+                            # --- CEK APAKAH DENGAN INSTRUKSI AUTO-PILOT PEN ---
+                            # Jika pen_k kosong, berisi '-', '--', 'nan', 'Otomatis', dll.
+                            is_auto_pen = (
+                                not pen_k 
+                                or pen_k.lower() in ["nan", "none", "null", "otomatis", "auto"]
+                                or pen_k.replace("-", "").replace("–", "").replace("—", "").strip() == ""
+                            )
+
+                            if is_auto_pen:
                                 pen_terpilih = None
                                 list_pen_di_blok = struktur_kandang.get(blok_k, [])
                                 
@@ -262,9 +272,14 @@ def tampilkan_menu_registrasi(df_sapi, list_jenis_sapi, struktur_kandang, save_d
                                 if not pen_terpilih:
                                     err_msg.append(f"Semua Pen di '{blok_k}' sudah penuh (Maksimal 25 ekor per Pen)")
                             else:
-                                # Input Pen secara manual dari Excel
-                                lokasi_f = f"{blok_k} - {pen_k}"
-                                if pen_k not in struktur_kandang.get(blok_k, []):
+                                # Jika diisi nama Pen spesifik secara manual di Excel
+                                if " - " in pen_k:
+                                    lokasi_f = pen_k
+                                else:
+                                    lokasi_f = f"{blok_k} - {pen_k}"
+
+                                pen_nama_saja = pen_k.split(" - ")[-1] if " - " in pen_k else pen_k
+                                if pen_nama_saja not in struktur_kandang.get(blok_k, []):
                                     err_msg.append(f"Nomor Pen '{pen_k}' tidak ada di {blok_k}")
                                 else:
                                     isi_pen = pen_counts.get(lokasi_f, 0)
@@ -279,9 +294,9 @@ def tampilkan_menu_registrasi(df_sapi, list_jenis_sapi, struktur_kandang, save_d
                             validation_errors.append(f"Baris #{no_baris}: {', '.join(err_msg)}")
 
                         rows_to_save.append({
-                            "Kode Sapi": kode_t if kode_t != "nan" else "-",
-                            "RFID/Tag Asal": rfid_a if rfid_a != "nan" else "-",
-                            "RFID/Tag": rfid_k if rfid_k != "nan" else "-",
+                            "Kode Sapi": kode_t if kode_t not in ["nan", "None", ""] else "-",
+                            "RFID/Tag Asal": rfid_a if rfid_a not in ["nan", "None", ""] else "-",
+                            "RFID/Tag": rfid_k if rfid_k not in ["nan", "None", ""] else "-",
                             "Jenis Sapi": jenis,
                             "Jenis Kelamin": jk,
                             "Umur Masuk (Bulan)": umur,
