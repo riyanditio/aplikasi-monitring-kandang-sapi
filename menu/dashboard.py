@@ -74,7 +74,7 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
             df_chart_adg = df_sapi.groupby("Blok Kandang")["ADG (kg/hari)"].mean().reset_index().set_index("Blok Kandang")
             st.bar_chart(df_chart_adg["ADG (kg/hari)"], color="#2670e8")
         with cg2:
-            st.markdown("**🐂 Distribusi Komposisi Jenis/Rumpun Sapi**")
+            st.markdown("**🐂 Distribusi Komposisi Jenis Sapi**")
             df_chart_jenis = df_sapi["Jenis Sapi"].value_counts().reset_index()
             df_chart_jenis.columns = ["Jenis Sapi", "Jumlah (Ekor)"]
             st.bar_chart(df_chart_jenis.set_index("Jenis Sapi")["Jumlah (Ekor)"], color="#ff9800")
