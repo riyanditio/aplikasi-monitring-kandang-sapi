@@ -70,31 +70,55 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
     
     with tab_grafik:
         cg1, cg2 = st.columns(2)
+        
+        # --- GRAFIK 1: RATA-RATA ADG PER BLOK (MODEL LINGKARAN/PIE) ---
         with cg1:
             st.markdown("**📈 Rata-rata Pertumbuhan (ADG) per Blok Kandang**")
-            df_chart_adg = df_sapi.groupby("Blok Kandang")["ADG (kg/hari)"].mean().reset_index().set_index("Blok Kandang")
-            st.bar_chart(df_chart_adg["ADG (kg/hari)"], color="#2670e8")
+            df_chart_adg = df_sapi.groupby("Blok Kandang")["ADG (kg/hari)"].mean().reset_index()
+            
+            fig_pie_adg = px.pie(
+                df_chart_adg, 
+                names="Blok Kandang", 
+                values="ADG (kg/hari)",
+                hole=0.4, # Model Donut Lingkaran
+                color_discrete_sequence=px.colors.qualitative.Set3
+            )
+            fig_pie_adg.update_traces(
+                textposition='inside', 
+                textinfo='percent+label',
+                hovertemplate='<b>%{label}</b><br>Rata-rata ADG: %{value:.2f} kg/hari'
+            )
+            fig_pie_adg.update_layout(
+                margin=dict(t=10, b=10, l=10, r=10),
+                showlegend=True,
+                height=320
+            )
+            st.plotly_chart(fig_pie_adg, use_container_width=True)
         
+        # --- GRAFIK 2: DISTRIBUSI KOMPOSISI JENIS SAPI (MODEL LINGKARAN/PIE) ---
         with cg2:
             st.markdown("**🐂 Distribusi Komposisi Jenis Sapi**")
             df_chart_jenis = df_sapi["Jenis Sapi"].value_counts().reset_index()
             df_chart_jenis.columns = ["Jenis Sapi", "Jumlah (Ekor)"]
             
-            # --- TAMPILAN GRAFIK LINGKARAN / BULAT (DONUT CHART) ---
-            fig_pie = px.pie(
+            fig_pie_jenis = px.pie(
                 df_chart_jenis, 
                 names="Jenis Sapi", 
                 values="Jumlah (Ekor)",
                 hole=0.4, # Model Donut Lingkaran
                 color_discrete_sequence=px.colors.qualitative.Set2
             )
-            fig_pie.update_traces(textposition='inside', textinfo='percent+label')
-            fig_pie.update_layout(
+            fig_pie_jenis.update_traces(
+                textposition='inside', 
+                textinfo='percent+label',
+                hovertemplate='<b>%{label}</b><br>Jumlah: %{value} Ekor'
+            )
+            fig_pie_jenis.update_layout(
                 margin=dict(t=10, b=10, l=10, r=10),
                 showlegend=True,
                 height=320
             )
-            st.plotly_chart(fig_pie, use_container_width=True)
+            st.plotly_chart(fig_pie_jenis, use_container_width=True)
 
     with tab_tabel:
         st.markdown("💡 **Legenda Warna:** 🟥 Merah = Pen Isolasi/Sakit | 🟨 Kuning = Performa Rendah (ADG < Target)")
