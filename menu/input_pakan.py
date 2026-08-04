@@ -309,7 +309,6 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                 )
 
                 st.markdown("---")
-                # Menggunakan list_pakan_opsi terintegrasi dari Supabase
                 pakan_terpilih_dropdown = st.selectbox("4. Pilih Jenis / Nama Formula Pakan", list_pakan_opsi + ["Lain-lain (Input Manual)"])
                 
                 if pakan_terpilih_dropdown == "Lain-lain (Input Manual)":
@@ -589,7 +588,7 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                     st.success("🗑️ Record berhasil dihapus!")
                     st.rerun()
 
-    # ==================== TAB 3: REKAPITULASI REALISASI PAKAN (FORMAT DRAFT) ====================
+    # ==================== TAB 3: REKAPITULASI REALISASI PAKAN ====================
     with tab3:
         st.markdown("### 📊 Laporan Progres Realisasi Pemberian Pakan")
         
@@ -600,17 +599,29 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
         if df_pakan.empty:
             st.info("Belum ada data riwayat pakan yang tercatat di database.")
         else:
-            f_col1, f_col2 = st.columns([1.5, 2])
+            # --- PANEL FILTER 3 KOLOM DINAMIS (BLOK + PEN + PERIODE) ---
+            f_col1, f_col2, f_col3 = st.columns([1.5, 1.5, 2])
+            
             with f_col1:
                 opsi_blok = ["Semua Blok Kandang"] + list(STRUKTUR_KANDANG.keys())
                 blok_pilihan_filter = st.selectbox("🔍 Filter Blok Kandang:", opsi_blok)
+            
             with f_col2:
+                if blok_pilihan_filter == "Semua Blok Kandang":
+                    opsi_pen = ["Semua Pen"]
+                else:
+                    list_pen_tersedia = STRUKTUR_KANDANG.get(blok_pilihan_filter, [])
+                    opsi_pen = ["Semua Pen"] + list_pen_tersedia
+                pen_pilihan_filter = st.selectbox("🏠 Filter Pen Kandang:", opsi_pen)
+
+            with f_col3:
                 filter_periode = st.radio(
                     "📅 Filter Periode Tanggal:",
                     ["Semua Tanggal", "Hari Ini", "7 Hari Terakhir", "Bulan Ini"],
                     horizontal=True
                 )
 
+            # Terapkan Filter Tanggal
             df_f = df_pakan.copy()
             df_f["Tanggal_dt"] = pd.to_datetime(df_f["Tanggal"], errors='coerce')
             today = datetime.now().date()
@@ -623,11 +634,16 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
             elif filter_periode == "Bulan Ini":
                 df_f = df_f[(df_f["Tanggal_dt"].dt.month == today.month) & (df_f["Tanggal_dt"].dt.year == today.year)]
 
+            # Terapkan Filter Blok & Pen Kandang
             if blok_pilihan_filter != "Semua Blok Kandang":
                 df_f = df_f[df_f["Lokasi Pen"].astype(str).str.startswith(f"{blok_pilihan_filter} -")]
+                
+                if pen_pilihan_filter != "Semua Pen":
+                    lokasi_target_full = f"{blok_pilihan_filter} - {pen_pilihan_filter}"
+                    df_f = df_f[df_f["Lokasi Pen"].astype(str) == lokasi_target_full]
 
             if df_f.empty:
-                st.warning("⚠️ Tidak ada data transaksi pakan pada filter periode / blok kandang terpilih.")
+                st.warning("⚠️ Tidak ada data transaksi pakan pada filter periode / blok / pen kandang terpilih.")
             else:
                 # 1. Kelompokkan Jenis Pakan Dinamis Berdasarkan Master
                 df_f["Kategori Pakan"] = df_f["Jenis Pakan"].apply(lambda p: kelompokkan_jenis_pakan(p, df_master_pakan))
