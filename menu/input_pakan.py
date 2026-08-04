@@ -4,16 +4,50 @@ from datetime import datetime, timedelta
 import io
 import importlib
 
-# ==================== FUNGSI HELPER KELOMPOK PAKAN ====================
-def kelompokkan_jenis_pakan(nama_pakan):
-    """
-    Mengkategorikan nama pakan dari database ke 5 kelompok utama
-    sesuai draft format rekapitulasi pakan.
-    """
-    nama = str(nama_pakan).lower().strip()
-    if "konsentrat" in nama:
+# ==================== MASTER DEFAULT PAKAN FALLBACK ====================
+DEFAULT_PAKAN = [
+    {"Nama Pakan": "Konsentrat Hijau", "Kategori": "Konsentrat"},
+    {"Nama Pakan": "Silase", "Kategori": "Silase"},
+    {"Nama Pakan": "Jerami Fermentasi", "Kategori": "Jerami"},
+    {"Nama Pakan": "Rumput Odot/Gajah", "Kategori": "Hijauan"},
+    {"Nama Pakan": "Obat/Suplemen Khusus", "Kategori": "Suplemen & Sampingan"},
+    {"Nama Pakan": "TUM / Pakan Campur", "Kategori": "Konsentrat"}
+]
+
+# ==================== HELPER MASTER PAKAN SUPABASE ====================
+def load_master_pakan(read_sheet_to_df):
+    """Membaca daftar master jenis pakan dari database Supabase."""
+    COLS_MASTER = ["Nama Pakan", "Kategori"]
+    try:
+        df_m = read_sheet_to_df("jenis_pakan", COLS_MASTER)
+        if df_m.empty or "Nama Pakan" not in df_m.columns:
+            return pd.DataFrame(DEFAULT_PAKAN)
+        return df_m
+    except Exception:
+        return pd.DataFrame(DEFAULT_PAKAN)
+
+
+def kelompokkan_jenis_pakan(nama_pakan, df_master_pakan=None):
+    """Mengkategorikan nama pakan ke 5 kolom standar rekapitulasi."""
+    nama = str(nama_pakan).strip().lower()
+    if df_master_pakan is not None and not df_master_pakan.empty:
+        match = df_master_pakan[df_master_pakan["Nama Pakan"].astype(str).str.strip().str.lower() == nama]
+        if not match.empty:
+            kat = str(match.iloc[0]["Kategori"]).lower()
+            if "konsentrat" in kat:
+                return "Konsentrat (kg)"
+            elif "hijauan" in kat:
+                return "Hijauan (kg)"
+            elif "jerami" in kat:
+                return "Jerami (kg)"
+            elif "silase" in kat:
+                return "Silase (kg)"
+            else:
+                return "Lainnya / Suplemen (kg)"
+
+    if "konsentrat" in nama or "tum" in nama:
         return "Konsentrat (kg)"
-    elif "hijauan" in nama or "rumput" in nama or "odot" in nama:
+    elif "hijauan" in nama or "rumput" in nama or "odot" in nama or "gajah" in nama:
         return "Hijauan (kg)"
     elif "jerami" in nama:
         return "Jerami (kg)"
@@ -22,12 +56,10 @@ def kelompokkan_jenis_pakan(nama_pakan):
     else:
         return "Lainnya / Suplemen (kg)"
 
+
 # ==================== GENERATOR EXCEL REKAPITULASI DRAFT ====================
 def buat_excel_rekapitulasi_pakan(df_rekap_pivoted, summary_data):
-    """
-    Membuat file Excel Rekapitulasi Pakan dengan Header Bertingkat (Merged)
-    persis seperti 'Draff tampilan rekapitulasi pakan di web monitoring.xlsx'.
-    """
+    """Membuat file Excel Rekapitulasi Pakan dengan Header Bertingkat (Merged)."""
     buffer = io.BytesIO()
     try:
         openpyxl = importlib.import_module("openpyxl")
@@ -41,7 +73,6 @@ def buat_excel_rekapitulasi_pakan(df_rekap_pivoted, summary_data):
         ws = wb.active
         ws.title = "Sheet1"
 
-        # Styling Warna & Font
         header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
         sub_header_fill = PatternFill(start_color="2F5597", end_color="2F5597", fill_type="solid")
         header_font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
@@ -55,7 +86,6 @@ def buat_excel_rekapitulasi_pakan(df_rekap_pivoted, summary_data):
             bottom=Side(style='thin', color='D9D9D9')
         )
 
-        # Header Row 1
         ws.cell(row=1, column=1, value="No")
         ws.cell(row=1, column=2, value="Tanggal")
         ws.cell(row=1, column=3, value="Lokasi kandang / Pan")
@@ -65,7 +95,6 @@ def buat_excel_rekapitulasi_pakan(df_rekap_pivoted, summary_data):
         ws.cell(row=1, column=11, value="Jumlah Sapi")
         ws.cell(row=1, column=12, value="Konsumsi per ekor (Kg)")
 
-        # Merging Cells
         ws.merge_cells("A1:A2")
         ws.merge_cells("B1:B2")
         ws.merge_cells("C1:C2")
@@ -75,7 +104,6 @@ def buat_excel_rekapitulasi_pakan(df_rekap_pivoted, summary_data):
         ws.merge_cells("K1:K2")
         ws.merge_cells("L1:L2")
 
-        # Header Row 2 (Sub-Kolom Pakan)
         ws.cell(row=2, column=5, value="Konsentrat (Kg)")
         ws.cell(row=2, column=6, value="Hijauan (Kg)")
         ws.cell(row=2, column=7, value="Jerami (Kg)")
@@ -141,12 +169,14 @@ def buat_excel_rekapitulasi_pakan(df_rekap_pivoted, summary_data):
         return buffer.getvalue(), "csv"
 
 
-# ==================== FUNGSI GENERATOR TEMPLATE UPLOAD PAKAN ====================
-def buat_template_excel_pakan(STRUKTUR_KANDANG):
+# ==================== GENERATOR TEMPLATE UPLOAD PAKAN ====================
+def buat_template_excel_pakan(STRUKTUR_KANDANG, list_pakan_master):
+    """Membuat file Excel template Input Pakan Harian dengan Dropdown Pakan Dinamis."""
     buffer = io.BytesIO()
     
     blok_default = list(STRUKTUR_KANDANG.keys())[0] if STRUKTUR_KANDANG else "Blok Karantina"
     pen_default = STRUKTUR_KANDANG[blok_default][0] if (STRUKTUR_KANDANG and STRUKTUR_KANDANG[blok_default]) else "Pen Karantina 1"
+    pakan_sample = list_pakan_master[0] if list_pakan_master else "Konsentrat Hijau"
 
     sample_data = [
         {
@@ -155,17 +185,8 @@ def buat_template_excel_pakan(STRUKTUR_KANDANG):
             "Nomor Pen": pen_default,
             "Metode Pemberian": "Serentak",
             "Kode Sapi Target (Jika Spesifik)": "-",
-            "Jenis Pakan": "Konsentrat Hijau",
+            "Jenis Pakan": pakan_sample,
             "Kuantitas Pakan (kg)": 5.5
-        },
-        {
-            "Tanggal (YYYY-MM-DD)": datetime.now().strftime("%Y-%m-%d"),
-            "Blok Kandang": blok_default,
-            "Nomor Pen": pen_default,
-            "Metode Pemberian": "Spesifik",
-            "Kode Sapi Target (Jika Spesifik)": "S5-002",
-            "Jenis Pakan": "Obat/Suplemen Khusus",
-            "Kuantitas Pakan (kg)": 1.0
         }
     ]
     df_sample = pd.DataFrame(sample_data)
@@ -174,9 +195,9 @@ def buat_template_excel_pakan(STRUKTUR_KANDANG):
         {"KOLOM": "Tanggal (YYYY-MM-DD)", "ATURAN PENGISIAN": "WAJIB DIISI. Format tanggal distribusi pakan: YYYY-MM-DD (contoh: 2026-08-04)."},
         {"KOLOM": "Blok Kandang", "ATURAN PENGISIAN": f"HARUS SAMA PERSIS DENGAN MASTER BLOK: {', '.join(list(STRUKTUR_KANDANG.keys()))}"},
         {"KOLOM": "Nomor Pen", "ATURAN PENGISIAN": "WAJIB DIISI. Nama Pen lokasi kandang (contoh: Pen Karantina 1, Pen A1)."},
-        {"KOLOM": "Metode Pemberian", "ATURAN PENGISIAN": "PILIH DARI DROPDOWN EXCEL: 'Serentak' (diberikan serentak ke seluruh sapi di pen) atau 'Spesifik' (pakan khusus 1 ekor)."},
+        {"KOLOM": "Metode Pemberian", "ATURAN PENGISIAN": "PILIH DARI DROPDOWN EXCEL: 'Serentak' atau 'Spesifik'."},
         {"KOLOM": "Kode Sapi Target (Jika Spesifik)", "ATURAN PENGISIAN": "DIISI JIKA METODE = 'Spesifik'. Ketik Kode Sapi target (contoh: S5-002). Isikan '-' jika Metode = 'Serentak'."},
-        {"KOLOM": "Jenis Pakan", "ATURAN PENGISIAN": "PILIH DARI DROPDOWN EXCEL: 'Konsentrat Hijau', 'Silase', 'Jerami Fermentasi', 'Obat/Suplemen Khusus', 'TUM / Pakan Campur', 'Lain-lain'."},
+        {"KOLOM": "Jenis Pakan", "ATURAN PENGISIAN": f"PILIH DARI DROPDOWN EXCEL: {', '.join(list_pakan_master[:10])}"},
         {"KOLOM": "Kuantitas Pakan (kg)", "ATURAN PENGISIAN": "WAJIB DIISI. Jika Serentak: isikan jatah kg/ekor. Jika Spesifik: isikan total kg untuk sapi tersebut."}
     ]
     df_panduan = pd.DataFrame(panduan_data)
@@ -192,11 +213,14 @@ def buat_template_excel_pakan(STRUKTUR_KANDANG):
             wb = writer.book
             ws_input = wb['FORM_INPUT_PAKAN_HARIAN']
 
+            # Dropdown Metode
             dv_metode = DataValidation(type="list", formula1='"Serentak, Spesifik"', allow_blank=True)
             ws_input.add_data_validation(dv_metode)
             dv_metode.add("D2:D500")
 
-            dv_pakan = DataValidation(type="list", formula1='"Konsentrat Hijau, Silase, Jerami Fermentasi, Obat/Suplemen Khusus, TUM / Pakan Campur, Lain-lain"', allow_blank=True)
+            # Dropdown Jenis Pakan Dinamis dari Supabase
+            str_pakan_formula = f'"{", ".join(list_pakan_master[:15])}"'
+            dv_pakan = DataValidation(type="list", formula1=str_pakan_formula, allow_blank=True)
             ws_input.add_data_validation(dv_pakan)
             dv_pakan.add("F2:F500")
 
@@ -219,11 +243,43 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
 
     df_sapi["Total Pakan (kg)"] = pd.to_numeric(df_sapi["Total Pakan (kg)"], errors='coerce').fillna(0.0).astype(float)
     COLS_PAKAN = ["Tanggal", "Lokasi Pen", "Metode", "Target Spesifik", "Jenis Pakan", "Jumlah Pakan (kg)", "Operator"]
-    
+    COLS_MASTER_PAK = ["Nama Pakan", "Kategori"]
+
+    # Load master jenis pakan dari Supabase
+    df_master_pakan = load_master_pakan(read_sheet_to_df)
+    list_pakan_opsi = df_master_pakan["Nama Pakan"].dropna().unique().tolist()
+    if not list_pakan_opsi:
+        list_pakan_opsi = [item["Nama Pakan"] for item in DEFAULT_PAKAN]
+
     tab1, tab2, tab3 = st.tabs(["➕ Input Pakan Baru", "⚙️ Edit / Hapus Riwayat Pakan", "📊 Rekapitulasi Realisasi Pakan"])
     
     # ==================== TAB 1: INPUT PAKAN BARU ====================
     with tab1:
+        # PANEL MASTER PAKAN (EXPANDER SUPABASE)
+        with st.expander("🌾 Kelola & Tambah Jenis / Formula Pakan Baru (Database Supabase)"):
+            st.caption("Tambahkan jenis pakan baru di sini agar otomatis terintegrasi ke form input, template Excel, dan rekapitulasi.")
+            col_m1, col_m2, col_m3 = st.columns([2, 2, 1.2])
+            with col_m1:
+                pakan_baru_nama = st.text_input("Nama Formula / Jenis Pakan Baru", placeholder="Contoh: Ampas Tahu").strip()
+            with col_m2:
+                kat_baru_pilihan = st.selectbox("Kategori Utama", ["Konsentrat", "Hijauan", "Jerami", "Silase", "Suplemen & Sampingan"])
+            with col_m3:
+                st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+                if st.button("💾 Simpan Master", type="secondary", use_container_width=True):
+                    if not pakan_baru_nama:
+                        st.error("Nama pakan tidak boleh kosong!")
+                    else:
+                        with st.spinner("💾 Menyimpan ke Supabase..."):
+                            row_m_baru = {"Nama Pakan": pakan_baru_nama, "Kategori": kat_baru_pilihan}
+                            df_master_pakan = pd.concat([df_master_pakan, pd.DataFrame([row_m_baru])], ignore_index=True).drop_duplicates(subset=["Nama Pakan"])
+                            write_df_to_sheet("jenis_pakan", df_master_pakan, COLS_MASTER_PAK)
+                            add_activity_log(user_name, "Tambah Master Pakan", f"Menambahkan {pakan_baru_nama} ({kat_baru_pilihan}) ke database")
+                        st.success(f"🎉 Sukses menambahkan **{pakan_baru_nama}**!")
+                        st.rerun()
+
+            st.dataframe(df_master_pakan, use_container_width=True, hide_index=True)
+
+        st.markdown("---")
         sub_satuan, sub_excel = st.tabs(["📝 Form Input Satuan", "📥 Upload Batch File Excel"])
 
         with sub_satuan:
@@ -253,10 +309,10 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                 )
 
                 st.markdown("---")
-                opsi_pakan_default = ["Konsentrat Hijau", "Silase", "Jerami Fermentasi", "Obat/Suplemen Khusus", "TUM / Pakan Campur", "Lain-lain"]
-                pakan_terpilih_dropdown = st.selectbox("4. Pilih Jenis / Nama Formula Pakan", opsi_pakan_default)
+                # Menggunakan list_pakan_opsi terintegrasi dari Supabase
+                pakan_terpilih_dropdown = st.selectbox("4. Pilih Jenis / Nama Formula Pakan", list_pakan_opsi + ["Lain-lain (Input Manual)"])
                 
-                if pakan_terpilih_dropdown == "Lain-lain":
+                if pakan_terpilih_dropdown == "Lain-lain (Input Manual)":
                     jenis_pakan = st.text_input("📋 Masukkan Nama Formula Pakan Baru", placeholder="Contoh: Ampas Tahu").strip()
                 else:
                     jenis_pakan = pakan_terpilih_dropdown
@@ -266,7 +322,7 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                     total_pakan_terhitung = round(pakan_per_ekor * jumlah_sapi, 2)
                     st.markdown("---")
                     st.metric(
-                        label="秤 Total Kuantitas Pakan yang Akan Diturunkan (Otomatis)", 
+                        label="⚖️ Total Kuantitas Pakan yang Akan Diturunkan (Otomatis)", 
                         value=f"{total_pakan_terhitung} kg",
                         delta=f"Berdasarkan hitungan: {pakan_per_ekor} kg x {jumlah_sapi} ekor"
                     )
@@ -333,7 +389,7 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
 
         with sub_excel:
             st.markdown("### 📥 Import Distribusi Pakan Harian via File Excel")
-            bytes_tmpl, ext_tmpl, mime_tmpl = buat_template_excel_pakan(STRUKTUR_KANDANG)
+            bytes_tmpl, ext_tmpl, mime_tmpl = buat_template_excel_pakan(STRUKTUR_KANDANG, list_pakan_opsi)
             st.download_button(
                 label=f"📥 Unduh Template Excel Distribusi Pakan (.{ext_tmpl.upper()})",
                 data=bytes_tmpl,
@@ -465,7 +521,7 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
 
             col_form, col_auth = st.columns(2)
             with col_form:
-                jenis_baru = st.text_input("Koreksi Jenis Pakan", value=str(row_lama["Jenis Pakan"])).strip()
+                jenis_baru = st.selectbox("Koreksi Jenis Pakan", list_pakan_opsi, index=list_pakan_opsi.index(row_lama["Jenis Pakan"]) if row_lama["Jenis Pakan"] in list_pakan_opsi else 0)
                 jumlah_baru = st.number_input("Koreksi Jumlah Pakan (kg)", min_value=0.0, value=float(row_lama["Jumlah Pakan (kg)"]), step=1.0, format="%.2f")
             with col_auth:
                 pwd_input = st.text_input("Masukkan Password Otorisasi Admin", type="password", key="auth_pakan_pass")
@@ -544,7 +600,6 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
         if df_pakan.empty:
             st.info("Belum ada data riwayat pakan yang tercatat di database.")
         else:
-            # --- PANEL FILTER ---
             f_col1, f_col2 = st.columns([1.5, 2])
             with f_col1:
                 opsi_blok = ["Semua Blok Kandang"] + list(STRUKTUR_KANDANG.keys())
@@ -556,7 +611,6 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                     horizontal=True
                 )
 
-            # Terapkan Filter Tanggal
             df_f = df_pakan.copy()
             df_f["Tanggal_dt"] = pd.to_datetime(df_f["Tanggal"], errors='coerce')
             today = datetime.now().date()
@@ -569,20 +623,17 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
             elif filter_periode == "Bulan Ini":
                 df_f = df_f[(df_f["Tanggal_dt"].dt.month == today.month) & (df_f["Tanggal_dt"].dt.year == today.year)]
 
-            # Terapkan Filter Blok Kandang
             if blok_pilihan_filter != "Semua Blok Kandang":
                 df_f = df_f[df_f["Lokasi Pen"].astype(str).str.startswith(f"{blok_pilihan_filter} -")]
 
             if df_f.empty:
-                st.warning(" Tidak ada data transaksi pakan pada filter periode / blok kandang terpilih.")
+                st.warning("⚠️ Tidak ada data transaksi pakan pada filter periode / blok kandang terpilih.")
             else:
-                # 1. Kelompokkan Jenis Pakan ke 5 Kategori Standar
-                df_f["Kategori Pakan"] = df_f["Jenis Pakan"].apply(kelompokkan_jenis_pakan)
+                # 1. Kelompokkan Jenis Pakan Dinamis Berdasarkan Master
+                df_f["Kategori Pakan"] = df_f["Jenis Pakan"].apply(lambda p: kelompokkan_jenis_pakan(p, df_master_pakan))
 
-                # 2. Hitung Jumlah Populasi Sapi per Pen
                 pen_counts = df_sapi["Lokasi Pen"].value_counts().to_dict()
 
-                # 3. Pivot Matriks Pakan per Pen per Tanggal per Metode
                 pivot_df = df_f.pivot_table(
                     index=["Tanggal", "Lokasi Pen", "Metode"],
                     columns="Kategori Pakan",
@@ -591,7 +642,6 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                     fill_value=0.0
                 ).reset_index()
 
-                # Pastikan seluruh 5 kolom kategori pakan selalu ada
                 kategori_cols = ["Konsentrat (kg)", "Hijauan (kg)", "Jerami (kg)", "Silase (kg)", "Lainnya / Suplemen (kg)"]
                 for col in kategori_cols:
                     if col not in pivot_df.columns:
@@ -614,7 +664,6 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                 cols_final = ["Tanggal", "Lokasi Kandang / Pen", "Metode Pakan"] + kategori_cols + ["Total Pakan (kg)", "Jumlah Sapi", "Konsumsi per Ekor (kg)"]
                 pivot_df = pivot_df[cols_final].sort_values(by=["Tanggal", "Lokasi Kandang / Pen"], ascending=[False, True]).reset_index(drop=True)
 
-                # --- HITUNG AKUMULASI RINGKASAN ---
                 tot_konsentrat = pivot_df["Konsentrat (kg)"].sum()
                 tot_hijauan = pivot_df["Hijauan (kg)"].sum()
                 tot_jerami = pivot_df["Jerami (kg)"].sum()
@@ -656,7 +705,6 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                         use_container_width=True
                     )
 
-                # BUAT TABEL DENGAN BARIS TOTAL
                 df_tampil_web = pivot_df.copy()
                 df_tampil_web.insert(0, "No", range(1, len(df_tampil_web) + 1))
 
