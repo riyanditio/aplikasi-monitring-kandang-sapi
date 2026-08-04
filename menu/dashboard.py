@@ -80,7 +80,7 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
                 df_chart_adg, 
                 names="Blok Kandang", 
                 values="ADG (kg/hari)",
-                hole=0.4, # Model Donut Lingkaran
+                hole=0.4,
                 color_discrete_sequence=px.colors.qualitative.Set3
             )
             fig_pie_adg.update_traces(
@@ -105,7 +105,7 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
                 df_chart_jenis, 
                 names="Jenis Sapi", 
                 values="Jumlah (Ekor)",
-                hole=0.4, # Model Donut Lingkaran
+                hole=0.4,
                 color_discrete_sequence=px.colors.qualitative.Set2
             )
             fig_pie_jenis.update_traces(
@@ -135,7 +135,13 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
             except: pass
             return [''] * len(row)
 
-        df_monitor = df_sapi.drop(columns=['Blok Kandang']).copy()
+        df_monitor = df_sapi.drop(columns=['Blok Kandang'], errors='ignore').copy()
+        
+        # HILANGKAN KOLOM UMUR MASUK DARI TABEL MONITORING
+        cols_umur = [c for c in df_monitor.columns if "umur" in c.lower()]
+        if cols_umur:
+            df_monitor = df_monitor.drop(columns=cols_umur)
+
         df_monitor = df_monitor.sort_values(by="Kode Sapi", ascending=True).reset_index(drop=True)
         df_monitor = df_monitor.rename(columns={"Kode Sapi": "Kode Tiba", "RFID/Tag": "RFID/Tag Kandang"})
         if "RFID/Tag Asal" not in df_monitor.columns: df_monitor["RFID/Tag Asal"] = "-"
