@@ -67,7 +67,7 @@ DB_MAPPING = {
     "data_sapi": {
         "columns": {
             "Kode Sapi": "kode_sapi", "RFID/Tag Asal": "rfid_tag_asal", "RFID/Tag": "rfid_tag", "Jenis Sapi": "jenis_sapi",
-            "Jenis Kelamin": "jenis_kelamin", "Umur Masuk (Bulan)": "umur_masuk_bulan", "Asal Negara": "asal_negara",
+            "Jenis Kelamin": "jenis_kelamin", "Asal Negara": "asal_negara",
             "Tgl Masuk": "tgl_masuk", "Bobot Awal (kg)": "bobot_awal", "Tgl Cek Akhir": "tgl_cek_akhir",
             "Bobot Akhir (kg)": "bobot_akhir", "ADG (kg/hari)": "adg_kg_hari", "Total Pakan (kg)": "total_pakan_kg",
             "Tgl Pakan Terakhir": "tgl_pakan_terakhir", "Lokasi Pen": "lokasi_pen"
@@ -166,8 +166,8 @@ def write_df_to_sheet(worksheet_name, df, default_cols):
             try:
                 with engine.begin() as conn: jalankan_penyimpanan(conn)
             except Exception as e_db:
-                error_msg = str(e_db)
-                if "does not exist" in error_msg or "UndefinedTable" in error_msg:
+                error_msg = str(e_db).lower()
+                if ("relation" in error_msg and "does not exist" in error_msg and "column" not in error_msg) or "undefinedtable" in error_msg:
                     columns_sql = ",\n  ".join([f"{col} NUMERIC" if any(k in col for k in ['kg', 'bulan', 'hari', 'rp', 'ekor', 'bobot', 'adg', 'total', 'fcr', 'suhu']) else f"{col} TEXT" for col in df_db.columns])
                     sql_auto_create = f"CREATE TABLE {worksheet_name} (\n  id SERIAL PRIMARY KEY,\n  {columns_sql}\n);"
                     
@@ -216,8 +216,8 @@ def append_df_to_db(worksheet_name, df_new_records, default_cols):
             try:
                 with engine.begin() as conn: jalankan_append(conn)
             except Exception as e_db:
-                error_msg = str(e_db)
-                if "does not exist" in error_msg or "UndefinedTable" in error_msg:
+                error_msg = str(e_db).lower()
+                if ("relation" in error_msg and "does not exist" in error_msg and "column" not in error_msg) or "undefinedtable" in error_msg:
                     columns_sql = ",\n  ".join([f"{col} NUMERIC" if any(k in col for k in ['kg', 'bulan', 'hari', 'rp', 'ekor', 'bobot', 'adg', 'total', 'fcr', 'suhu']) else f"{col} TEXT" for col in df_db.columns])
                     sql_auto_create = f"CREATE TABLE {worksheet_name} (\n  id SERIAL PRIMARY KEY,\n  {columns_sql}\n);"
                     with engine.begin() as conn_create: conn_create.execute(text(sql_auto_create))
@@ -316,12 +316,12 @@ def load_master_pen():
     return df
 
 def load_data():
-    cols = ["Kode Sapi", "RFID/Tag Asal", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Umur Masuk (Bulan)", "Asal Negara", "Tgl Masuk", "Bobot Awal (kg)", "Tgl Cek Akhir", "Bobot Akhir (kg)", "ADG (kg/hari)", "Total Pakan (kg)", "Tgl Pakan Terakhir", "Lokasi Pen"]
+    cols = ["Kode Sapi", "RFID/Tag Asal", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Asal Negara", "Tgl Masuk", "Bobot Awal (kg)", "Tgl Cek Akhir", "Bobot Akhir (kg)", "ADG (kg/hari)", "Total Pakan (kg)", "Tgl Pakan Terakhir", "Lokasi Pen"]
     df = read_sheet_to_df("data_sapi", cols)
     if df.empty: return pd.DataFrame(columns=cols)
     return df.reindex(columns=cols)
 
-def save_data(df): write_df_to_sheet("data_sapi", df, ["Kode Sapi", "RFID/Tag Asal", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Umur Masuk (Bulan)", "Asal Negara", "Tgl Masuk", "Bobot Awal (kg)", "Tgl Cek Akhir", "Bobot Akhir (kg)", "ADG (kg/hari)", "Total Pakan (kg)", "Tgl Pakan Terakhir", "Lokasi Pen"])
+def save_data(df): write_df_to_sheet("data_sapi", df, ["Kode Sapi", "RFID/Tag Asal", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Asal Negara", "Tgl Masuk", "Bobot Awal (kg)", "Tgl Cek Akhir", "Bobot Akhir (kg)", "ADG (kg/hari)", "Total Pakan (kg)", "Tgl Pakan Terakhir", "Lokasi Pen"])
 def load_panen_data(): return read_sheet_to_df("data_panen", ["Kode Sapi", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Asal Negara", "Tgl Masuk", "Tgl Panen", "Lama Pelihara (Hari)", "Bobot Awal (kg)", "Bobot Panen (kg)", "Total Gain (kg)", "Total Pakan (kg)", "FCR Akhir", "ADG Akhir (kg/hari)", "Harga Jual /kg (Rp)", "Total Pendapatan (Rp)", "Pembeli/Tujuan"])
 def save_panen_data(df): write_df_to_sheet("data_panen", df, ["Kode Sapi", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Asal Negara", "Tgl Masuk", "Tgl Panen", "Lama Pelihara (Hari)", "Bobot Awal (kg)", "Bobot Panen (kg)", "Total Gain (kg)", "Total Pakan (kg)", "FCR Akhir", "ADG Akhir (kg/hari)", "Harga Jual /kg (Rp)", "Total Pendapatan (Rp)", "Pembeli/Tujuan"])
 
@@ -373,7 +373,6 @@ else:
         menu = st.selectbox("📌 PILIH MENU APLIKASI", daftar_menu_user, label_visibility="collapsed")
 
     with col_user_popup:
-        # Tombol Pop-up Profil Admin/Operator & Logout
         with st.popover(f"👤 {user_name.upper()} ({user_role})", use_container_width=True):
             st.markdown("### 📋 Profil Operator")
             st.markdown(f"**Username:** {user_name.upper()}")
