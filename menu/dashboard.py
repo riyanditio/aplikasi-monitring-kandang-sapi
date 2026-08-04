@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 
 def tampilkan_dashboard(df_sapi, read_sheet_to_df):
     st.subheader("📊 Dashboard Utama & Pemantauan Populasi Berkala")
@@ -73,11 +74,27 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
             st.markdown("**📈 Rata-rata Pertumbuhan (ADG) per Blok Kandang**")
             df_chart_adg = df_sapi.groupby("Blok Kandang")["ADG (kg/hari)"].mean().reset_index().set_index("Blok Kandang")
             st.bar_chart(df_chart_adg["ADG (kg/hari)"], color="#2670e8")
+        
         with cg2:
             st.markdown("**🐂 Distribusi Komposisi Jenis Sapi**")
             df_chart_jenis = df_sapi["Jenis Sapi"].value_counts().reset_index()
             df_chart_jenis.columns = ["Jenis Sapi", "Jumlah (Ekor)"]
-            st.bar_chart(df_chart_jenis.set_index("Jenis Sapi")["Jumlah (Ekor)"], color="#ff9800")
+            
+            # --- TAMPILAN GRAFIK LINGKARAN / BULAT (DONUT CHART) ---
+            fig_pie = px.pie(
+                df_chart_jenis, 
+                names="Jenis Sapi", 
+                values="Jumlah (Ekor)",
+                hole=0.4, # Model Donut Lingkaran
+                color_discrete_sequence=px.colors.qualitative.Set2
+            )
+            fig_pie.update_traces(textposition='inside', textinfo='percent+label')
+            fig_pie.update_layout(
+                margin=dict(t=10, b=10, l=10, r=10),
+                showlegend=True,
+                height=320
+            )
+            st.plotly_chart(fig_pie, use_container_width=True)
 
     with tab_tabel:
         st.markdown("💡 **Legenda Warna:** 🟥 Merah = Pen Isolasi/Sakit | 🟨 Kuning = Performa Rendah (ADG < Target)")
@@ -95,7 +112,6 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
             return [''] * len(row)
 
         df_monitor = df_sapi.drop(columns=['Blok Kandang']).copy()
-        # Memastikan tabel monitor tetap terurut secara eksplisit berdasarkan Kode Sapi
         df_monitor = df_monitor.sort_values(by="Kode Sapi", ascending=True).reset_index(drop=True)
         df_monitor = df_monitor.rename(columns={"Kode Sapi": "Kode Tiba", "RFID/Tag": "RFID/Tag Kandang"})
         if "RFID/Tag Asal" not in df_monitor.columns: df_monitor["RFID/Tag Asal"] = "-"
