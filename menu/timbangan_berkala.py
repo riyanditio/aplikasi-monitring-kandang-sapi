@@ -83,7 +83,10 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
     
     COLS_RIWAYAT_TIMBANG = ["Tanggal Timbang", "Kode Sapi", "RFID/Tag", "Lokasi Pen", "Bobot (kg)", "ADG (kg/hari)", "Operator"]
 
-    if df_sapi.empty:
+    # Filter Strict: Hanya gunakan sapi yang berstatus AKTIF
+    df_sapi_aktif = df_sapi[df_sapi["Status"] == "AKTIF"] if "Status" in df_sapi.columns else df_sapi
+
+    if df_sapi_aktif.empty:
         st.warning("⚠️ Belum ada data sapi aktif yang tersedia untuk ditimbang.")
         return
 
@@ -97,12 +100,12 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
 
     # ==================== TAB 1: INPUT TIMBANGAN BARU ====================
     with tab_input:
-        st.markdown("Gunakan filter Blok & Pen untuk mempercepat pencarian sapi yang akan ditimbang.")
+        st.markdown("Gunakan filter Blok & Pen untuk mempercepat pencarian sapi aktif yang akan ditimbang.")
 
         # Ambil riwayat timbangan untuk memfilter sapi yang sudah ditimbang hari ini
         df_riwayat_timbang = read_sheet_to_df("riwayat_timbangan", COLS_RIWAYAT_TIMBANG)
 
-        list_lokasi_eksis = df_sapi["Lokasi Pen"].unique()
+        list_lokasi_eksis = df_sapi_aktif["Lokasi Pen"].unique()
         grid_filter = {}
         for item in list_lokasi_eksis:
             if " - " in str(item):
@@ -127,7 +130,7 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
             filter_pen = st.selectbox("Pilih Nomor/Bagian Pen Sapi:", sorted(list(set(grid_filter[filter_blok]))), key="fp_input")
 
         lokasi_pencarian = f"{filter_blok} - {filter_pen}" if filter_blok != "Format Lama" else filter_pen
-        df_sapi_terfilter = df_sapi[df_sapi["Lokasi Pen"] == lokasi_pencarian].copy()
+        df_sapi_terfilter = df_sapi_aktif[df_sapi_aktif["Lokasi Pen"] == lokasi_pencarian].copy()
 
         if df_sapi_terfilter.empty:
             st.info(f"ℹ️ Pen **{lokasi_pencarian}** saat ini sedang tidak diisi oleh sapi aktif.")
@@ -153,7 +156,7 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
             sapi_terhitung = len(df_sapi_terfilter) - len(df_sapi_belum_timbang)
 
             if df_sapi_belum_timbang.empty:
-                st.success(f"🎉 **SELESAI!** Seluruh **{total_sapi_pen} ekor sapi** di **{lokasi_pencarian}** telah selesai ditimbang pada tanggal **{tgl_timbang_str}**.")
+                st.success(f"🎉 **SELESAI!** Seluruh **{total_sapi_pen} ekor sapi aktif** di **{lokasi_pencarian}** telah selesai ditimbang pada tanggal **{tgl_timbang_str}**.")
                 
                 with st.expander("🔍 Lihat Daftar Sapi yang Sudah Ditimbang Hari Ini di Pen Ini"):
                     df_sudah_show = df_sapi_terfilter.sort_values(by="Kode Sapi", ascending=True)
@@ -169,7 +172,7 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
                 
                 matched_rows = df_sapi_belum_timbang[(df_sapi_belum_timbang["Kode Sapi"] == kode_sapi_asli) & (df_sapi_belum_timbang["RFID/Tag"] == rfid_sapi_asli)]
                 if matched_rows.empty:
-                    st.error("⚠️ Data sapi tidak ditemukan di database master.")
+                    st.error("⚠️ Data sapi aktif tidak ditemukan di database master.")
                 else:
                     row_sapi = matched_rows.iloc[0]
 
@@ -194,10 +197,8 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
                         st.markdown("##### 📸 Modul Pemindaian Visual AI & Depth LiDAR")
                         st.caption("📱 **Penting:** Pegang HP dalam posisi **Horizontal (Landscape)**. Kamera Utama / Belakang akan otomatis diaktifkan.")
 
-                        # Inject CSS & JS Perbaikan Kamera Landscape & Auto Rear Camera
                         st.markdown("""
                         <style>
-                        /* Bingkai Kamera Utama */
                         div[data-testid="stCameraInput"] {
                             position: relative !important;
                             border: 2px dashed #00FF66 !important;
@@ -211,7 +212,6 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
                             overflow: visible !important;
                         }
 
-                        /* Tombol Switch / Flip Kamera */
                         div[data-testid="stCameraInput"] button[aria-label*="Switch"],
                         div[data-testid="stCameraInput"] button[aria-label*="camera"],
                         div[data-testid="stCameraInput"] button[aria-label*="Kamera"],
@@ -329,17 +329,18 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
                             with st.spinner("⏳ Memproses perhitungan ADG dan mengamankan data..."):
                                 adg_terbaru = float(calculate_adg(row_sapi["Tgl Masuk"], row_sapi["Bobot Awal (kg)"], tgl_timbang_str, bobot_timbang_baru))
                                 
-                                # Update database master sapi
+                                # Update database master sapi (Khusus Sapi Aktif)
                                 mask = (df_sapi["Kode Sapi"] == kode_sapi_asli) & (df_sapi["RFID/Tag"] == rfid_sapi_asli)
+                                if "Status" in df_sapi.columns:
+                                    mask = mask & (df_sapi["Status"] == "AKTIF")
+
                                 df_sapi.loc[mask, "Tgl Cek Akhir"] = tgl_timbang_str
                                 df_sapi.loc[mask, "Bobot Akhir (kg)"] = float(bobot_timbang_baru)
                                 df_sapi.loc[mask, "ADG (kg/hari)"] = adg_terbaru
                                 save_data(df_sapi)
 
-                                # Catat metode penimbangan di log operator
                                 ket_metode = "Foto Visual AI/LiDAR" if "Foto" in metode_penimbangan else "Timbangan Fisik"
 
-                                # Tambahkan ke log riwayat timbangan
                                 new_log = {
                                     "Tanggal Timbang": tgl_timbang_str,
                                     "Kode Sapi": kode_sapi_asli,
@@ -354,7 +355,6 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
                                 
                                 add_activity_log(user_name, "Timbangan Rutin", f"Menimbang Sapi {kode_sapi_asli} via {ket_metode} di {row_sapi['Lokasi Pen']} bobot {bobot_timbang_baru}kg")
                                 
-                                # Clean session state est weight
                                 if f"est_weight_{kode_sapi_asli}" in st.session_state:
                                     del st.session_state[f"est_weight_{kode_sapi_asli}"]
 
@@ -437,28 +437,32 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
 
     # ==================== TAB 3: ANALISIS TIMBANG ====================
     with tab_analisis:
-        st.markdown("### 📈 Evaluasi Kurva Pertumbuhan Individu")
-        opsi_semua_sapi = df_sapi.apply(lambda r: f"{r['Kode Sapi']} - RFID: {r['RFID/Tag']}", axis=1).tolist()
-        sapi_analisis = st.selectbox("Pilih Sapi untuk Dianalisis:", opsi_semua_sapi)
+        st.markdown("### 📈 Evaluasi Kurva Pertumbuhan Individu Sapi Aktif")
+        opsi_semua_sapi = df_sapi_aktif.apply(lambda r: f"{r['Kode Sapi']} - RFID: {r['RFID/Tag']}", axis=1).tolist()
         
-        if sapi_analisis:
-            df_riwayat_timbang = read_sheet_to_df("riwayat_timbangan", COLS_RIWAYAT_TIMBANG)
+        if not opsi_semua_sapi:
+            st.info("ℹ️ Tidak ada populasi sapi aktif untuk dianalisis.")
+        else:
+            sapi_analisis = st.selectbox("Pilih Sapi untuk Dianalisis:", opsi_semua_sapi)
             
-            if not df_riwayat_timbang.empty:
-                kode_a = sapi_analisis.split(" - RFID: ")[0]
-                rfid_a = sapi_analisis.split(" - RFID: ")[1]
+            if sapi_analisis:
+                df_riwayat_timbang = read_sheet_to_df("riwayat_timbangan", COLS_RIWAYAT_TIMBANG)
                 
-                df_hist = df_riwayat_timbang[(df_riwayat_timbang["Kode Sapi"] == kode_a) & (df_riwayat_timbang["RFID/Tag"] == rfid_a)].copy()
-                
-                if df_hist.empty:
-                    st.info(f"Belum ada catatan riwayat timbangan tambahan untuk sapi {sapi_analisis}.")
+                if not df_riwayat_timbang.empty:
+                    kode_a = sapi_analisis.split(" - RFID: ")[0]
+                    rfid_a = sapi_analisis.split(" - RFID: ")[1]
+                    
+                    df_hist = df_riwayat_timbang[(df_riwayat_timbang["Kode Sapi"] == kode_a) & (df_riwayat_timbang["RFID/Tag"] == rfid_a)].copy()
+                    
+                    if df_hist.empty:
+                        st.info(f"Belum ada catatan riwayat timbangan tambahan untuk sapi {sapi_analisis}.")
+                    else:
+                        df_hist = df_hist.sort_values(by="Tanggal Timbang")
+                        st.markdown(f"**Riwayat Kenaikan Bobot (kg) Sapi: {kode_a}**")
+                        
+                        df_chart = df_hist[["Tanggal Timbang", "Bobot (kg)"]].set_index("Tanggal Timbang")
+                        st.line_chart(df_chart, use_container_width=True)
+                        
+                        st.dataframe(df_hist, use_container_width=True, hide_index=True, column_config={"Bobot (kg)": st.column_config.NumberColumn(format="%.2f"), "ADG (kg/hari)": st.column_config.NumberColumn(format="%.2f")})
                 else:
-                    df_hist = df_hist.sort_values(by="Tanggal Timbang")
-                    st.markdown(f"**Riwayat Kenaikan Bobot (kg) Sapi: {kode_a}**")
-                    
-                    df_chart = df_hist[["Tanggal Timbang", "Bobot (kg)"]].set_index("Tanggal Timbang")
-                    st.line_chart(df_chart, use_container_width=True)
-                    
-                    st.dataframe(df_hist, use_container_width=True, hide_index=True, column_config={"Bobot (kg)": st.column_config.NumberColumn(format="%.2f"), "ADG (kg/hari)": st.column_config.NumberColumn(format="%.2f")})
-            else:
-                st.info("ℹ️ Belum ada data riwayat timbangan yang tercatat di database.")
+                    st.info("ℹ️ Belum ada data riwayat timbangan yang tercatat di database.")
