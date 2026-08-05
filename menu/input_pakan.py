@@ -529,7 +529,6 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
             idx_pilihan = pilihan_no - 1
             row_lama = df_pakan.iloc[idx_pilihan]
             
-            metode_lama = row_lama.get("Metode", "Serentak")
             target_lama = row_lama.get("Target Spesifik", "-")
             
             st.info(f"📍 **Data Terpilih:** Pen {row_lama['Lokasi Pen']} | Target: **{target_lama}** | {row_lama['Jenis Pakan']} | {row_lama['Jumlah Pakan (kg)']} kg")
@@ -550,27 +549,39 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                 elif not jenis_baru or jumlah_baru <= 0: st.error("❌ Nama & berat pakan harus valid.")
                 else:
                     with st.spinner("🔄 Memproses kalkulasi ulang..."):
+                        # Kurangi nilai pakan lama dari sapi target
                         if target_lama != "-" and " - " in str(target_lama):
                             target_kode = str(target_lama).split(" - ")[0]
                             target_rfid = str(target_lama).split(" - ")[1]
                             mask_tarik = (df_sapi["Kode Sapi"] == target_kode) & (df_sapi["RFID/Tag"] == target_rfid)
+                            if "Status" in df_sapi.columns:
+                                mask_tarik = mask_tarik & (df_sapi["Status"] == "AKTIF")
                             df_sapi.loc[mask_tarik, "Total Pakan (kg)"] -= float(row_lama["Jumlah Pakan (kg)"])
                         else:
                             sapi_pen_lama = df_sapi_aktif[df_sapi_aktif["Lokasi Pen"] == row_lama["Lokasi Pen"]]
                             if len(sapi_pen_lama) > 0:
-                                df_sapi.loc[(df_sapi["Lokasi Pen"] == row_lama["Lokasi Pen"]) & (df_sapi["Status"] == "AKTIF"), "Total Pakan (kg)"] -= (float(row_lama["Jumlah Pakan (kg)"]) / len(sapi_pen_lama))
+                                mask_pen_l = (df_sapi["Lokasi Pen"] == row_lama["Lokasi Pen"])
+                                if "Status" in df_sapi.columns:
+                                    mask_pen_l = mask_pen_l & (df_sapi["Status"] == "AKTIF")
+                                df_sapi.loc[mask_pen_l, "Total Pakan (kg)"] -= (float(row_lama["Jumlah Pakan (kg)"]) / len(sapi_pen_lama))
                         
                         df_sapi["Total Pakan (kg)"] = df_sapi["Total Pakan (kg)"].clip(lower=0.0)
 
+                        # Tambahkan nilai pakan baru ke sapi target
                         if target_lama != "-" and " - " in str(target_lama):
                             target_kode = str(target_lama).split(" - ")[0]
                             target_rfid = str(target_lama).split(" - ")[1]
                             mask_tambah = (df_sapi["Kode Sapi"] == target_kode) & (df_sapi["RFID/Tag"] == target_rfid)
+                            if "Status" in df_sapi.columns:
+                                mask_tambah = mask_tambah & (df_sapi["Status"] == "AKTIF")
                             df_sapi.loc[mask_tambah, "Total Pakan (kg)"] += float(jumlah_baru)
                         else:
                             sapi_pen_baru = df_sapi_aktif[df_sapi_aktif["Lokasi Pen"] == row_lama["Lokasi Pen"]]
                             if len(sapi_pen_baru) > 0:
-                                df_sapi.loc[(df_sapi["Lokasi Pen"] == row_lama["Lokasi Pen"]) & (df_sapi["Status"] == "AKTIF"), "Total Pakan (kg)"] += (float(jumlah_baru) / len(sapi_pen_baru))
+                                mask_pen_b = (df_sapi["Lokasi Pen"] == row_lama["Lokasi Pen"])
+                                if "Status" in df_sapi.columns:
+                                    mask_pen_b = mask_pen_b & (df_sapi["Status"] == "AKTIF")
+                                df_sapi.loc[mask_pen_b, "Total Pakan (kg)"] += (float(jumlah_baru) / len(sapi_pen_baru))
 
                         save_data(df_sapi)
                         df_pakan.at[idx_pilihan, "Jenis Pakan"] = jenis_baru
@@ -589,11 +600,16 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                             target_kode = str(target_lama).split(" - ")[0]
                             target_rfid = str(target_lama).split(" - ")[1]
                             mask_tarik = (df_sapi["Kode Sapi"] == target_kode) & (df_sapi["RFID/Tag"] == target_rfid)
+                            if "Status" in df_sapi.columns:
+                                mask_tarik = mask_tarik & (df_sapi["Status"] == "AKTIF")
                             df_sapi.loc[mask_tarik, "Total Pakan (kg)"] -= float(row_lama["Jumlah Pakan (kg)"])
                         else:
                             sapi_pen_lama = df_sapi_aktif[df_sapi_aktif["Lokasi Pen"] == row_lama["Lokasi Pen"]]
                             if len(sapi_pen_lama) > 0:
-                                df_sapi.loc[(df_sapi["Lokasi Pen"] == row_lama["Lokasi Pen"]) & (df_sapi["Status"] == "AKTIF"), "Total Pakan (kg)"] -= (float(row_lama["Jumlah Pakan (kg)"]) / len(sapi_pen_lama))
+                                mask_pen_l = (df_sapi["Lokasi Pen"] == row_lama["Lokasi Pen"])
+                                if "Status" in df_sapi.columns:
+                                    mask_pen_l = mask_pen_l & (df_sapi["Status"] == "AKTIF")
+                                df_sapi.loc[mask_pen_l, "Total Pakan (kg)"] -= (float(row_lama["Jumlah Pakan (kg)"]) / len(sapi_pen_lama))
 
                         df_sapi["Total Pakan (kg)"] = df_sapi["Total Pakan (kg)"].clip(lower=0.0)
                         save_data(df_sapi)
@@ -615,7 +631,6 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
         if df_pakan.empty:
             st.info("Belum ada data riwayat pakan yang tercatat di database.")
         else:
-            # --- PANEL FILTER 3 KOLOM DINAMIS (BLOK + PEN + PERIODE) ---
             f_col1, f_col2, f_col3 = st.columns([1.5, 1.5, 2])
             
             with f_col1:
@@ -637,7 +652,6 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                     horizontal=True
                 )
 
-            # Terapkan Filter Tanggal
             df_f = df_pakan.copy()
             df_f["Tanggal_dt"] = pd.to_datetime(df_f["Tanggal"], errors='coerce')
             today = datetime.now().date()
@@ -650,7 +664,6 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
             elif filter_periode == "Bulan Ini":
                 df_f = df_f[(df_f["Tanggal_dt"].dt.month == today.month) & (df_f["Tanggal_dt"].dt.year == today.year)]
 
-            # Terapkan Filter Blok & Pen Kandang
             if blok_pilihan_filter != "Semua Blok Kandang":
                 df_f = df_f[df_f["Lokasi Pen"].astype(str).str.startswith(f"{blok_pilihan_filter} -")]
                 
@@ -661,10 +674,9 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
             if df_f.empty:
                 st.warning("⚠️ Tidak ada data transaksi pakan pada filter periode / blok / pen kandang terpilih.")
             else:
-                # 1. Kelompokkan Jenis Pakan Dinamis Berdasarkan Master
                 df_f["Kategori Pakan"] = df_f["Jenis Pakan"].apply(lambda p: kelompokkan_jenis_pakan(p, df_master_pakan))
 
-                # Hitung jumlah sapi AKTIF saja per pen
+                # Hitung jumlah populasi sapi AKTIF per pen
                 pen_counts = df_sapi_aktif["Lokasi Pen"].value_counts().to_dict()
 
                 pivot_df = df_f.pivot_table(
