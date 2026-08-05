@@ -93,17 +93,20 @@ def tampilkan_menu_panen_penjualan(df_sapi, save_data, add_activity_log, user_na
     
     df_panen = read_sheet_to_df("data_panen", cols_panen)
     
+    # Filter hanya sapi dengan status AKTIF
+    df_sapi_aktif = df_sapi[df_sapi["Status"] == "AKTIF"] if "Status" in df_sapi.columns else df_sapi
+
     # ==================== TAB 1: PROSES PANEN ====================
     with tab_form_panen:
         sub_satuan, sub_excel = st.tabs(["📝 Form Input Satuan", "📥 Upload Batch File Excel"])
 
         # ------------------- SUB-TAB 1: INPUT SATUAN -------------------
         with sub_satuan:
-            if df_sapi.empty: 
+            if df_sapi_aktif.empty: 
                 st.info("Tidak ada sapi aktif di kandang.")
             else:
                 st.write("### 📝 Form Pencatatan Keluar / Panen Manual")
-                pilihan_sapi = df_sapi["RFID/Tag"].astype(str).tolist()
+                pilihan_sapi = df_sapi_aktif["RFID/Tag"].astype(str).tolist()
                 selected_tag = st.selectbox("Pilih RFID Sapi yang Akan Dipanen:", options=pilihan_sapi)
                 idx = df_sapi[df_sapi["RFID/Tag"].astype(str) == selected_tag].index[0]
                 data_sapi = df_sapi.loc[idx]
@@ -120,6 +123,7 @@ def tampilkan_menu_panen_penjualan(df_sapi, save_data, add_activity_log, user_na
                 # --- KOLOM 1: INFORMASI LENGKAP SAPI ---
                 with col_p1:
                     st.info(f"""
+* **Kode Batch:** {data_sapi.get('Kode Batch', '-')}
 * **Kode Sapi:** {data_sapi.get('Kode Sapi', '-')}
 * **RFID/Tag Asal:** {data_sapi.get('RFID/Tag Asal', '-')}
 * **RFID/Tag Baru:** {data_sapi['RFID/Tag']}
@@ -189,9 +193,12 @@ def tampilkan_menu_panen_penjualan(df_sapi, save_data, add_activity_log, user_na
                                 }
                                 df_panen = pd.concat([df_panen, pd.DataFrame([data_panen_baru])], ignore_index=True)
                                 write_df_to_sheet("data_panen", df_panen, cols_panen)
-                                df_sapi = df_sapi.drop(idx).reset_index(drop=True)
+                                
+                                # Pembaruan status menjadi PANEN (tanpa menghapus record)
+                                df_sapi.loc[idx, "Status"] = "PANEN"
                                 save_data(df_sapi)
-                                add_activity_log(user_name, "Panen Sapi", f"Memanen Sapi Kode {data_sapi.get('Kode Sapi', '-')} | Pendapatan: {format_rupiah(total_pendapatan)}")
+                                
+                                add_activity_log(user_name, "Panen Sapi", f"Memanen Sapi Kode {data_sapi.get('Kode Sapi', '-')} [Batch: {data_sapi.get('Kode Batch', '-')}] | Pendapatan: {format_rupiah(total_pendapatan)}")
                                 
                             st.success(f"🎉 Sukses! Sapi RFID {selected_tag} Berhasil Dipanen.")
                             st.rerun()
@@ -232,13 +239,13 @@ def tampilkan_menu_panen_penjualan(df_sapi, save_data, add_activity_log, user_na
                     st.markdown("#### 3. Pratinjau & Validasi Data Otomatis")
 
                     rows_panen_to_save = []
-                    kodes_to_remove = []
+                    kodes_to_panen = []
                     validation_errors = []
 
-                    # Buat pemeta data sapi aktif dari df_sapi
+                    # Pemeta data sapi aktif
                     map_sapi_aktif = {}
-                    if not df_sapi.empty:
-                        for idx_s, sr in df_sapi.iterrows():
+                    if not df_sapi_aktif.empty:
+                        for idx_s, sr in df_sapi_aktif.iterrows():
                             k_sapi = str(sr.get("Kode Sapi", "")).strip()
                             if k_sapi and k_sapi not in ["nan", "None", "-"]:
                                 map_sapi_aktif[k_sapi] = (idx_s, sr)
@@ -269,7 +276,6 @@ def tampilkan_menu_panen_penjualan(df_sapi, save_data, add_activity_log, user_na
                         if harga_p <= 0:
                             err_msg.append("Harga jual harus > Rp 0")
 
-                        # Jika valid, jalankan kalkulasi performa otomatis
                         if not err_msg:
                             idx_sapi_orig, sr_sapi = map_sapi_aktif[kode_s]
                             rfid_tag = str(sr_sapi.get("RFID/Tag", "-"))
@@ -312,7 +318,7 @@ def tampilkan_menu_panen_penjualan(df_sapi, save_data, add_activity_log, user_na
                                 "Pembeli/Tujuan": pembeli if pembeli not in ["nan", "None", ""] else "Umum",
                                 "Status Validasi": "✅ SIAP SIMPAN"
                             })
-                            kodes_to_remove.append(kode_s)
+                            kodes_to_panen.append(kode_s)
                         else:
                             validation_errors.append(f"Baris #{no_baris}: {', '.join(err_msg)}")
                             rows_panen_to_save.append({
@@ -352,14 +358,15 @@ def tampilkan_menu_panen_penjualan(df_sapi, save_data, add_activity_log, user_na
                     if not df_valid_only.empty:
                         total_omset = df_valid_only["Total Pendapatan (Rp)"].sum()
                         if st.button(f"🚀 Sah-kan Panen {len(df_valid_only)} Sapi Valid ({format_rupiah(total_omset)})", type="primary", use_container_width=True):
-                            with st.spinner("💾 Mengunggah data panen & mengosongkan populasi sapi terpilih..."):
+                            with st.spinner("💾 Mengunggah data panen & mengupdate status populasi sapi..."):
                                 # 1. Simpan ke riwayat data_panen
                                 df_panen_existing = read_sheet_to_df("data_panen", cols_panen)
                                 df_panen_total = pd.concat([df_panen_existing, df_valid_only], ignore_index=True)
                                 write_df_to_sheet("data_panen", df_panen_total, cols_panen)
 
-                                # 2. Keluarkan sapi panen dari df_sapi aktif
-                                df_sapi = df_sapi[~df_sapi["Kode Sapi"].astype(str).isin(kodes_to_remove)].reset_index(drop=True)
+                                # 2. Ubah status sapi terpilih menjadi 'PANEN' di df_sapi
+                                mask_panen = df_sapi["Kode Sapi"].astype(str).isin(kodes_to_panen)
+                                df_sapi.loc[mask_panen, "Status"] = "PANEN"
                                 save_data(df_sapi)
 
                                 add_activity_log(user_name, "Batch Panen Sapi", f"Memanen {len(df_valid_only)} ekor sapi via Excel | Total Omset: {format_rupiah(total_omset)}")
