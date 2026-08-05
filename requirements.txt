@@ -6,3 +6,4 @@ openpyxl
 Pillow
 numpy
 plotly
+starlette<0.40.0
