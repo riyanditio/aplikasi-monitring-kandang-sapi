@@ -9,15 +9,21 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
         st.info("👋 Selamat Datang! Database kosong. Sapi baru belum ada yang terregistrasi masuk kandang.")
         return
 
-    # --- URUTKAN SELURUH DATA SAPI BERDASARKAN KODE SAPI (KODE TIBA) A-Z ---
-    df_sapi = df_sapi.sort_values(by="Kode Sapi", ascending=True).reset_index(drop=True)
+    # Filter Strict: Populasi sapi AKTIF di dalam kandang
+    df_sapi_aktif = df_sapi[df_sapi["Status"] == "AKTIF"].copy() if "Status" in df_sapi.columns else df_sapi.copy()
+
+    if df_sapi_aktif.empty:
+        st.warning("⚠️ Saat ini tidak ada sapi berstatus **AKTIF** di dalam kandang.")
+    else:
+        # --- URUTKAN SELURUH DATA SAPI AKTIF BERDASARKAN KODE SAPI A-Z ---
+        df_sapi_aktif = df_sapi_aktif.sort_values(by="Kode Sapi", ascending=True).reset_index(drop=True)
 
     TARGET_ADG = 1.6
 
-    df_sudah_timbang_berkala = df_sapi[df_sapi["Tgl Cek Akhir"].astype(str) != df_sapi["Tgl Masuk"].astype(str)].copy()
+    df_sudah_timbang_berkala = df_sapi_aktif[df_sapi_aktif["Tgl Cek Akhir"].astype(str) != df_sapi_aktif["Tgl Masuk"].astype(str)].copy() if not df_sapi_aktif.empty else pd.DataFrame()
 
-    total_ekor = len(df_sapi)
-    rata_bobot = df_sapi["Bobot Akhir (kg)"].mean()
+    total_ekor = len(df_sapi_aktif)
+    rata_bobot = df_sapi_aktif["Bobot Akhir (kg)"].mean() if not df_sapi_aktif.empty else 0.0
     
     if not df_sudah_timbang_berkala.empty:
         rata_adg = df_sudah_timbang_berkala["ADG (kg/hari)"].mean()
@@ -28,7 +34,7 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
 
     m1, m2, m3 = st.columns(3)
     m1.metric("📦 Total Populasi Aktif", f"{total_ekor} Ekor")
-    m2.metric("⚖️ Rata-rata Bobot Sapi", f"{rata_bobot:.2f} kg")
+    m2.metric("⚖️ Rata-rata Bobot Sapi Aktif", f"{rata_bobot:.2f} kg" if total_ekor > 0 else "0.00 kg")
     m3.metric("📈 Rata-rata ADG Kandang Tracked", f"{rata_adg:.2f} kg/hari", delta=status_adg if rata_adg > 0 else None)
 
     st.markdown("---")
@@ -37,7 +43,7 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
         df_underperform = df_sudah_timbang_berkala[df_sudah_timbang_berkala["ADG (kg/hari)"] < TARGET_ADG]
 
         if not df_underperform.empty:
-            st.warning(f"⚠️ **PERINGATAN DETEKSI PERFORMA:** Ditemukan **{len(df_underperform)} ekor** sapi dengan pertumbuhan di bawah target ({TARGET_ADG} kg/hari).")
+            st.warning(f"⚠️ **PERINGATAN DETEKSI PERFORMA:** Ditemukan **{len(df_underperform)} ekor** sapi aktif dengan pertumbuhan di bawah target ({TARGET_ADG} kg/hari).")
             
             df_underperform_view = df_underperform.copy()
             rename_underperform = {"Kode Sapi": "Kode Tiba", "RFID/Tag": "RFID/Tag Kandang"}
@@ -50,75 +56,80 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
                     column_config={"ADG (kg/hari)": st.column_config.NumberColumn("ADG (kg/hari)", format="%.2f")}
                 )
         else:
-            st.success(f"✅ **Kondisi Bagus:** Semua sapi yang sudah ditimbang berkala berhasil mencapai atau melewati target pertumbuhan {TARGET_ADG} kg/hari!")
+            st.success(f"✅ **Kondisi Bagus:** Semua sapi aktif yang sudah ditimbang berkala berhasil mencapai atau melewati target pertumbuhan {TARGET_ADG} kg/hari!")
     else:
-        st.info("ℹ️ **Informasi:** Seluruh populasi saat ini masih dalam masa awal masuk / karantina.")
+        st.info("ℹ️ **Informasi:** Seluruh populasi aktif saat ini masih dalam masa awal masuk / karantina.")
 
     st.markdown("---")
-    st.markdown("### 🏢 Ringkasan Kinerja per Blok Kandang")
-    df_sapi['Blok Kandang'] = df_sapi['Lokasi Pen'].apply(lambda x: str(x).split(' - ')[0] if ' - ' in str(x) else 'Format Lama')
-    
-    df_summary_blok = df_sapi.groupby('Blok Kandang').agg(Pop=('Kode Sapi', 'count'), Adg_Blok=('ADG (kg/hari)', 'mean')).reset_index()
+    st.markdown("### 🏢 Ringkasan Kinerja per Blok Kandang (Populasi Aktif)")
+    if not df_sapi_aktif.empty:
+        df_sapi_aktif['Blok Kandang'] = df_sapi_aktif['Lokasi Pen'].apply(lambda x: str(x).split(' - ')[0] if ' - ' in str(x) else 'Format Lama')
+        df_summary_blok = df_sapi_aktif.groupby('Blok Kandang').agg(Pop=('Kode Sapi', 'count'), Adg_Blok=('ADG (kg/hari)', 'mean')).reset_index()
 
-    cols_blok = st.columns(len(df_summary_blok))
-    for i, row_b in df_summary_blok.iterrows():
-        with cols_blok[i]:
-            st.metric(label=f"🏢 {row_b['Blok Kandang'].upper()}", value=f"{row_b['Pop']} Ekor", delta=f"{row_b['Adg_Blok']:.2f} kg/hari ADG" if row_b['Adg_Blok'] > 0 else None)
+        cols_blok = st.columns(len(df_summary_blok))
+        for i, row_b in df_summary_blok.iterrows():
+            with cols_blok[i]:
+                st.metric(label=f"🏢 {row_b['Blok Kandang'].upper()}", value=f"{row_b['Pop']} Ekor", delta=f"{row_b['Adg_Blok']:.2f} kg/hari ADG" if row_b['Adg_Blok'] > 0 else None)
+    else:
+        st.caption("Belum ada sebaran blok untuk sapi aktif.")
 
     st.markdown("---")
-    tab_grafik, tab_tabel = st.tabs(["📊 Grafik Analisis Performa", "📋 Tabel Monitor Seluruh Sapi"])
+    tab_grafik, tab_tabel = st.tabs(["📊 Grafik Analisis Performa", "📋 Tabel Monitor Seluruh Sapi Aktif"])
     
     with tab_grafik:
-        cg1, cg2 = st.columns(2)
-        
-        # --- GRAFIK 1: RATA-RATA ADG PER BLOK (MODEL LINGKARAN/PIE) ---
-        with cg1:
-            st.markdown("**📈 Rata-rata Pertumbuhan (ADG) per Blok Kandang**")
-            df_chart_adg = df_sapi.groupby("Blok Kandang")["ADG (kg/hari)"].mean().reset_index()
+        if not df_sapi_aktif.empty:
+            cg1, cg2 = st.columns(2)
             
-            fig_pie_adg = px.pie(
-                df_chart_adg, 
-                names="Blok Kandang", 
-                values="ADG (kg/hari)",
-                hole=0.4,
-                color_discrete_sequence=px.colors.qualitative.Set3
-            )
-            fig_pie_adg.update_traces(
-                textposition='inside', 
-                textinfo='percent+label',
-                hovertemplate='<b>%{label}</b><br>Rata-rata ADG: %{value:.2f} kg/hari'
-            )
-            fig_pie_adg.update_layout(
-                margin=dict(t=10, b=10, l=10, r=10),
-                showlegend=True,
-                height=320
-            )
-            st.plotly_chart(fig_pie_adg, use_container_width=True)
-        
-        # --- GRAFIK 2: DISTRIBUSI KOMPOSISI JENIS SAPI (MODEL LINGKARAN/PIE) ---
-        with cg2:
-            st.markdown("**🐂 Distribusi Komposisi Jenis Sapi**")
-            df_chart_jenis = df_sapi["Jenis Sapi"].value_counts().reset_index()
-            df_chart_jenis.columns = ["Jenis Sapi", "Jumlah (Ekor)"]
+            # --- GRAFIK 1: RATA-RATA ADG PER BLOK ---
+            with cg1:
+                st.markdown("**📈 Rata-rata Pertumbuhan (ADG) per Blok Kandang**")
+                df_chart_adg = df_sapi_aktif.groupby("Blok Kandang")["ADG (kg/hari)"].mean().reset_index()
+                
+                fig_pie_adg = px.pie(
+                    df_chart_adg, 
+                    names="Blok Kandang", 
+                    values="ADG (kg/hari)",
+                    hole=0.4,
+                    color_discrete_sequence=px.colors.qualitative.Set3
+                )
+                fig_pie_adg.update_traces(
+                    textposition='inside', 
+                    textinfo='percent+label',
+                    hovertemplate='<b>%{label}</b><br>Rata-rata ADG: %{value:.2f} kg/hari'
+                )
+                fig_pie_adg.update_layout(
+                    margin=dict(t=10, b=10, l=10, r=10),
+                    showlegend=True,
+                    height=320
+                )
+                st.plotly_chart(fig_pie_adg, use_container_width=True)
             
-            fig_pie_jenis = px.pie(
-                df_chart_jenis, 
-                names="Jenis Sapi", 
-                values="Jumlah (Ekor)",
-                hole=0.4,
-                color_discrete_sequence=px.colors.qualitative.Set2
-            )
-            fig_pie_jenis.update_traces(
-                textposition='inside', 
-                textinfo='percent+label',
-                hovertemplate='<b>%{label}</b><br>Jumlah: %{value} Ekor'
-            )
-            fig_pie_jenis.update_layout(
-                margin=dict(t=10, b=10, l=10, r=10),
-                showlegend=True,
-                height=320
-            )
-            st.plotly_chart(fig_pie_jenis, use_container_width=True)
+            # --- GRAFIK 2: DISTRIBUSI KOMPOSISI JENIS SAPI ---
+            with cg2:
+                st.markdown("**🐂 Distribusi Komposisi Jenis Sapi Aktif**")
+                df_chart_jenis = df_sapi_aktif["Jenis Sapi"].value_counts().reset_index()
+                df_chart_jenis.columns = ["Jenis Sapi", "Jumlah (Ekor)"]
+                
+                fig_pie_jenis = px.pie(
+                    df_chart_jenis, 
+                    names="Jenis Sapi", 
+                    values="Jumlah (Ekor)",
+                    hole=0.4,
+                    color_discrete_sequence=px.colors.qualitative.Set2
+                )
+                fig_pie_jenis.update_traces(
+                    textposition='inside', 
+                    textinfo='percent+label',
+                    hovertemplate='<b>%{label}</b><br>Jumlah: %{value} Ekor'
+                )
+                fig_pie_jenis.update_layout(
+                    margin=dict(t=10, b=10, l=10, r=10),
+                    showlegend=True,
+                    height=320
+                )
+                st.plotly_chart(fig_pie_jenis, use_container_width=True)
+        else:
+            st.info("Tidak ada data sapi aktif untuk ditampilkan dalam grafik.")
 
     with tab_tabel:
         st.markdown("💡 **Legenda Warna:** 🟥 Merah = Pen Isolasi/Sakit | 🟨 Kuning = Performa Rendah (ADG < Target)")
@@ -135,48 +146,56 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
             except: pass
             return [''] * len(row)
 
-        df_monitor = df_sapi.drop(columns=['Blok Kandang'], errors='ignore').copy()
-        
-        # HILANGKAN KOLOM UMUR MASUK DARI TABEL MONITORING
-        cols_umur = [c for c in df_monitor.columns if "umur" in c.lower()]
-        if cols_umur:
-            df_monitor = df_monitor.drop(columns=cols_umur)
+        if not df_sapi_aktif.empty:
+            df_monitor = df_sapi_aktif.drop(columns=['Blok Kandang'], errors='ignore').copy()
+            
+            cols_umur = [c for c in df_monitor.columns if "umur" in c.lower()]
+            if cols_umur:
+                df_monitor = df_monitor.drop(columns=cols_umur)
 
-        df_monitor = df_monitor.sort_values(by="Kode Sapi", ascending=True).reset_index(drop=True)
-        df_monitor = df_monitor.rename(columns={"Kode Sapi": "Kode Tiba", "RFID/Tag": "RFID/Tag Kandang"})
-        if "RFID/Tag Asal" not in df_monitor.columns: df_monitor["RFID/Tag Asal"] = "-"
-        
-        cols_order = list(df_monitor.columns)
-        if "Kode Tiba" in cols_order and "RFID/Tag Asal" in cols_order:
-            cols_order.remove("RFID/Tag Asal")
-            cols_order.insert(cols_order.index("Kode Tiba") + 1, "RFID/Tag Asal")
-            df_monitor = df_monitor[cols_order]
+            df_monitor = df_monitor.sort_values(by="Kode Sapi", ascending=True).reset_index(drop=True)
+            df_monitor = df_monitor.rename(columns={"Kode Sapi": "Kode Tiba", "RFID/Tag": "RFID/Tag Kandang"})
+            if "RFID/Tag Asal" not in df_monitor.columns: df_monitor["RFID/Tag Asal"] = "-"
+            
+            cols_order = list(df_monitor.columns)
+            if "Kode Tiba" in cols_order and "RFID/Tag Asal" in cols_order:
+                cols_order.remove("RFID/Tag Asal")
+                cols_order.insert(cols_order.index("Kode Tiba") + 1, "RFID/Tag Asal")
+                df_monitor = df_monitor[cols_order]
 
-        st.dataframe(
-            df_monitor.style.apply(style_monitor_kandang, axis=1), 
-            use_container_width=True, hide_index=True,
-            column_config={
-                "Bobot Awal (kg)": st.column_config.NumberColumn("Bobot Awal (kg)", format="%.2f"),
-                "Bobot Akhir (kg)": st.column_config.NumberColumn("Bobot Akhir (kg)", format="%.2f"),
-                "ADG (kg/hari)": st.column_config.NumberColumn("ADG (kg/hari)", format="%.2f"),
-                "Total Pakan (kg)": st.column_config.NumberColumn("Total Pakan (kg)", format="%.2f")
-            }
-        )
+            st.dataframe(
+                df_monitor.style.apply(style_monitor_kandang, axis=1), 
+                use_container_width=True, hide_index=True,
+                column_config={
+                    "Bobot Awal (kg)": st.column_config.NumberColumn("Bobot Awal (kg)", format="%.2f"),
+                    "Bobot Akhir (kg)": st.column_config.NumberColumn("Bobot Akhir (kg)", format="%.2f"),
+                    "ADG (kg/hari)": st.column_config.NumberColumn("ADG (kg/hari)", format="%.2f"),
+                    "Total Pakan (kg)": st.column_config.NumberColumn("Total Pakan (kg)", format="%.2f")
+                }
+            )
+        else:
+            st.info("Tidak ada data sapi aktif di dalam kandang.")
 
-    # ==================== FITUR PENCARIAN PROFIL SAPI ====================
+    # ==================== FITUR PENCARIAN PROFIL SAPI (Bisa Cari Semua Status) ====================
     st.markdown("---")
-    st.markdown("### 🔍 Pencarian Riwayat & Profil Lengkap Sapi")
+    st.markdown("### 🔍 Pencarian Riwayat & Profil Lengkap Sapi (Aktif & Arsip)")
     
-    opsi_cari_sapi = df_sapi.apply(lambda r: f"{r['Kode Sapi']} - RFID: {r['RFID/Tag']}", axis=1).tolist()
+    # Menampilkan seluruh sapi (Aktif, Panen, Afkir) dengan label status agar tetap bisa dilacak
+    df_sapi_sorted = df_sapi.sort_values(by="Kode Sapi", ascending=True)
+    opsi_cari_sapi = df_sapi_sorted.apply(
+        lambda r: f"{r['Kode Sapi']} - RFID: {r['RFID/Tag']} [{r.get('Status', 'AKTIF')}]", axis=1
+    ).tolist()
+    
     sapi_dicari = st.selectbox("Pilih / Ketik Nomor Sapi untuk melihat detail perjalanan:", ["-- Silakan Pilih Sapi --"] + opsi_cari_sapi)
 
     if sapi_dicari != "-- Silakan Pilih Sapi --":
         kode_cari = sapi_dicari.split(" - RFID: ")[0]
-        rfid_cari = sapi_dicari.split(" - RFID: ")[1]
+        rfid_cari = sapi_dicari.split(" - RFID: ")[1].split(" [")[0]
         
         info_sapi = df_sapi[(df_sapi["Kode Sapi"] == kode_cari) & (df_sapi["RFID/Tag"] == rfid_cari)].iloc[0]
+        st_status = info_sapi.get('Status', 'AKTIF')
         
-        st.info(f"**Profil Sapi:** Jenis {info_sapi['Jenis Sapi']} | Kelamin {info_sapi['Jenis Kelamin']} | Masuk: {info_sapi['Tgl Masuk']} | Posisi Saat Ini: **{info_sapi['Lokasi Pen']}**")
+        st.info(f"**Profil Sapi:** Status: **{st_status}** | Jenis: {info_sapi['Jenis Sapi']} | Kelamin: {info_sapi['Jenis Kelamin']} | Masuk: {info_sapi['Tgl Masuk']} | Posisi Terakhir: **{info_sapi['Lokasi Pen']}**")
         
         cl_hist1, cl_hist2 = st.columns(2)
         
@@ -191,7 +210,7 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
 
         with cl_hist2:
             st.markdown("🍽️ **Riwayat Pemberian Pakan**")
-            st.caption(f"*Total pakan terakumulasi nyata di master: **{info_sapi['Total Pakan (kg)']:.2f} kg***")
+            st.caption(f"*Total pakan terakumulasi nyata di master: **{float(info_sapi['Total Pakan (kg)']):.2f} kg***")
             
             df_r_pakan = read_sheet_to_df("pakan_harian", ["Tanggal", "Lokasi Pen", "Metode", "Target Spesifik", "Jenis Pakan", "Jumlah Pakan (kg)", "Operator"])
             
