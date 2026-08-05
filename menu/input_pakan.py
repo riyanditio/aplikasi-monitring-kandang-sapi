@@ -242,6 +242,10 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
         st.session_state["uploader_key_pakan"] = 0
 
     df_sapi["Total Pakan (kg)"] = pd.to_numeric(df_sapi["Total Pakan (kg)"], errors='coerce').fillna(0.0).astype(float)
+    
+    # Filter Strict: Hanya gunakan populasi sapi yang berstatus AKTIF
+    df_sapi_aktif = df_sapi[df_sapi["Status"] == "AKTIF"] if "Status" in df_sapi.columns else df_sapi
+
     COLS_PAKAN = ["Tanggal", "Lokasi Pen", "Metode", "Target Spesifik", "Jenis Pakan", "Jumlah Pakan (kg)", "Operator"]
     COLS_MASTER_PAK = ["Nama Pakan", "Kategori"]
 
@@ -294,12 +298,12 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                 pen_terpilih = st.selectbox("2. Pilih Pen Kandang", pen_tersaring)
                 
             lokasi_pen_full = f"{blok_terpilih} - {pen_terpilih}"
-            sapi_di_pen = df_sapi[df_sapi["Lokasi Pen"] == lokasi_pen_full]
+            sapi_di_pen = df_sapi_aktif[df_sapi_aktif["Lokasi Pen"] == lokasi_pen_full]
             jumlah_sapi = len(sapi_di_pen)
             st.info(f"📊 Jumlah populasi sapi aktif saat ini di **{lokasi_pen_full}**: **{jumlah_sapi} Ekor**")
 
             if jumlah_sapi == 0:
-                st.warning("⚠️ Tidak bisa menginput pakan. Pen ini masih kosong.")
+                st.warning("⚠️ Tidak bisa menginput pakan. Pen ini tidak memiliki populasi sapi aktif.")
             else:
                 st.markdown("---")
                 metode_pakan = st.radio(
@@ -358,8 +362,13 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                                     list_rows_baru.append(row_pakan_baru)
                                 
                                 df_pakan = pd.concat([df_pakan, pd.DataFrame(list_rows_baru)], ignore_index=True)
-                                df_sapi.loc[df_sapi["Lokasi Pen"] == lokasi_pen_full, "Total Pakan (kg)"] += float(pakan_per_ekor)
-                                df_sapi.loc[df_sapi["Lokasi Pen"] == lokasi_pen_full, "Tgl Pakan Terakhir"] = str(tgl_pakan)
+                                
+                                mask_update_serentak = (df_sapi["Lokasi Pen"] == lokasi_pen_full)
+                                if "Status" in df_sapi.columns:
+                                    mask_update_serentak = mask_update_serentak & (df_sapi["Status"] == "AKTIF")
+                                    
+                                df_sapi.loc[mask_update_serentak, "Total Pakan (kg)"] += float(pakan_per_ekor)
+                                df_sapi.loc[mask_update_serentak, "Tgl Pakan Terakhir"] = str(tgl_pakan)
                                 detail_sukses = f"Mendistribusikan Serentak {jenis_pakan} (@{pakan_per_ekor} kg/ekor) ke {lokasi_pen_full} (Dicatat individual untuk {jumlah_sapi} ekor)"
                             else:
                                 row_pakan_baru = {
@@ -374,7 +383,11 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                                 df_pakan = pd.concat([df_pakan, pd.DataFrame([row_pakan_baru])], ignore_index=True)
                                 target_kode = pilihan_sapi.split(" - ")[0]
                                 target_rfid = pilihan_sapi.split(" - ")[1]
+                                
                                 mask_spesifik = (df_sapi["Kode Sapi"] == target_kode) & (df_sapi["RFID/Tag"] == target_rfid)
+                                if "Status" in df_sapi.columns:
+                                    mask_spesifik = mask_spesifik & (df_sapi["Status"] == "AKTIF")
+                                    
                                 df_sapi.loc[mask_spesifik, "Total Pakan (kg)"] += float(total_pakan_terhitung)
                                 df_sapi.loc[mask_spesifik, "Tgl Pakan Terakhir"] = str(tgl_pakan)
                                 detail_sukses = f"Memberikan Khusus {jenis_pakan} ({total_pakan_terhitung} kg) kepada Sapi {pilihan_sapi} di {lokasi_pen_full}"
@@ -418,8 +431,8 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                     validation_errors = []
 
                     map_kode_to_rfid = {}
-                    if not df_sapi.empty and "Kode Sapi" in df_sapi.columns and "RFID/Tag" in df_sapi.columns:
-                        for _, sr in df_sapi.iterrows():
+                    if not df_sapi_aktif.empty and "Kode Sapi" in df_sapi_aktif.columns and "RFID/Tag" in df_sapi_aktif.columns:
+                        for _, sr in df_sapi_aktif.iterrows():
                             map_kode_to_rfid[str(sr["Kode Sapi"]).strip()] = str(sr["RFID/Tag"]).strip()
 
                     for idx, r in df_upload.iterrows():
@@ -437,8 +450,8 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
 
                         err_msg = []
                         if blok_k not in STRUKTUR_KANDANG: err_msg.append(f"Blok '{blok_k}' tidak terdaftar")
-                        sapi_di_pen = df_sapi[df_sapi["Lokasi Pen"] == lokasi_f]
-                        if sapi_di_pen.empty and "Blok" not in err_msg: err_msg.append(f"Pen '{lokasi_f}' kosong")
+                        sapi_di_pen = df_sapi_aktif[df_sapi_aktif["Lokasi Pen"] == lokasi_f]
+                        if sapi_di_pen.empty and "Blok" not in err_msg: err_msg.append(f"Pen '{lokasi_f}' tidak memiliki sapi aktif")
                         if kuantitas <= 0: err_msg.append("Kuantitas pakan harus > 0 kg")
 
                         status_str = "✅ SIAP SIMPAN" if not err_msg else f"❌ ERROR: {', '.join(err_msg)}"
@@ -481,6 +494,9 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
 
                                 for (k_sapi, r_sapi), add_kg in updates_sapi_dict.items():
                                     mask_sp = (df_sapi["Kode Sapi"].astype(str) == k_sapi) & (df_sapi["RFID/Tag"].astype(str) == r_sapi)
+                                    if "Status" in df_sapi.columns:
+                                        mask_sp = mask_sp & (df_sapi["Status"] == "AKTIF")
+                                        
                                     df_sapi.loc[mask_sp, "Total Pakan (kg)"] += float(add_kg)
                                     if (k_sapi, r_sapi) in last_pakan_date_dict:
                                         df_sapi.loc[mask_sp, "Tgl Pakan Terakhir"] = last_pakan_date_dict[(k_sapi, r_sapi)]
@@ -540,9 +556,9 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                             mask_tarik = (df_sapi["Kode Sapi"] == target_kode) & (df_sapi["RFID/Tag"] == target_rfid)
                             df_sapi.loc[mask_tarik, "Total Pakan (kg)"] -= float(row_lama["Jumlah Pakan (kg)"])
                         else:
-                            sapi_pen_lama = df_sapi[df_sapi["Lokasi Pen"] == row_lama["Lokasi Pen"]]
+                            sapi_pen_lama = df_sapi_aktif[df_sapi_aktif["Lokasi Pen"] == row_lama["Lokasi Pen"]]
                             if len(sapi_pen_lama) > 0:
-                                df_sapi.loc[df_sapi["Lokasi Pen"] == row_lama["Lokasi Pen"], "Total Pakan (kg)"] -= (float(row_lama["Jumlah Pakan (kg)"]) / len(sapi_pen_lama))
+                                df_sapi.loc[(df_sapi["Lokasi Pen"] == row_lama["Lokasi Pen"]) & (df_sapi["Status"] == "AKTIF"), "Total Pakan (kg)"] -= (float(row_lama["Jumlah Pakan (kg)"]) / len(sapi_pen_lama))
                         
                         df_sapi["Total Pakan (kg)"] = df_sapi["Total Pakan (kg)"].clip(lower=0.0)
 
@@ -552,9 +568,9 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                             mask_tambah = (df_sapi["Kode Sapi"] == target_kode) & (df_sapi["RFID/Tag"] == target_rfid)
                             df_sapi.loc[mask_tambah, "Total Pakan (kg)"] += float(jumlah_baru)
                         else:
-                            sapi_pen_baru = df_sapi[df_sapi["Lokasi Pen"] == row_lama["Lokasi Pen"]]
+                            sapi_pen_baru = df_sapi_aktif[df_sapi_aktif["Lokasi Pen"] == row_lama["Lokasi Pen"]]
                             if len(sapi_pen_baru) > 0:
-                                df_sapi.loc[df_sapi["Lokasi Pen"] == row_lama["Lokasi Pen"], "Total Pakan (kg)"] += (float(jumlah_baru) / len(sapi_pen_baru))
+                                df_sapi.loc[(df_sapi["Lokasi Pen"] == row_lama["Lokasi Pen"]) & (df_sapi["Status"] == "AKTIF"), "Total Pakan (kg)"] += (float(jumlah_baru) / len(sapi_pen_baru))
 
                         save_data(df_sapi)
                         df_pakan.at[idx_pilihan, "Jenis Pakan"] = jenis_baru
@@ -575,9 +591,9 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                             mask_tarik = (df_sapi["Kode Sapi"] == target_kode) & (df_sapi["RFID/Tag"] == target_rfid)
                             df_sapi.loc[mask_tarik, "Total Pakan (kg)"] -= float(row_lama["Jumlah Pakan (kg)"])
                         else:
-                            sapi_pen_lama = df_sapi[df_sapi["Lokasi Pen"] == row_lama["Lokasi Pen"]]
+                            sapi_pen_lama = df_sapi_aktif[df_sapi_aktif["Lokasi Pen"] == row_lama["Lokasi Pen"]]
                             if len(sapi_pen_lama) > 0:
-                                df_sapi.loc[df_sapi["Lokasi Pen"] == row_lama["Lokasi Pen"], "Total Pakan (kg)"] -= (float(row_lama["Jumlah Pakan (kg)"]) / len(sapi_pen_lama))
+                                df_sapi.loc[(df_sapi["Lokasi Pen"] == row_lama["Lokasi Pen"]) & (df_sapi["Status"] == "AKTIF"), "Total Pakan (kg)"] -= (float(row_lama["Jumlah Pakan (kg)"]) / len(sapi_pen_lama))
 
                         df_sapi["Total Pakan (kg)"] = df_sapi["Total Pakan (kg)"].clip(lower=0.0)
                         save_data(df_sapi)
@@ -648,7 +664,8 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                 # 1. Kelompokkan Jenis Pakan Dinamis Berdasarkan Master
                 df_f["Kategori Pakan"] = df_f["Jenis Pakan"].apply(lambda p: kelompokkan_jenis_pakan(p, df_master_pakan))
 
-                pen_counts = df_sapi["Lokasi Pen"].value_counts().to_dict()
+                # Hitung jumlah sapi AKTIF saja per pen
+                pen_counts = df_sapi_aktif["Lokasi Pen"].value_counts().to_dict()
 
                 pivot_df = df_f.pivot_table(
                     index=["Tanggal", "Lokasi Pen", "Metode"],
