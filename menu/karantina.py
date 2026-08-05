@@ -45,7 +45,6 @@ def buat_template_excel_karantina():
     df_panduan = pd.DataFrame(panduan_data)
 
     try:
-        # Import openpyxl secara aman di dalam try block
         from openpyxl.worksheet.datavalidation import DataValidation
 
         with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
@@ -55,7 +54,7 @@ def buat_template_excel_karantina():
             wb = writer.book
             ws_input = wb['FORM_INPUT_REKAM_MEDIS']
 
-            # 1. Pemasangan Dropdown untuk Kolom E (Kondisi Klinis)
+            # Dropdown Kondisi Klinis
             dv_kondisi = DataValidation(
                 type="list", 
                 formula1='"Sehat / Normal, Lesu / Kurang Nafsu Makan, Sakit Ringan, Sakit Berat, Pemulihan"', 
@@ -64,7 +63,7 @@ def buat_template_excel_karantina():
             ws_input.add_data_validation(dv_kondisi)
             dv_kondisi.add("E2:E500")
 
-            # 2. Pemasangan Dropdown untuk Kolom F (Tindakan Medis)
+            # Dropdown Tindakan Medis
             dv_tindakan = DataValidation(
                 type="list", 
                 formula1='"Pemberian Obat Cacing (Deworming), Vaksinasi PMK, Vaksinasi LSD, Injeksi Vitamin (B-Kompleks / ADE), Pemberian Antibiotik, Perawatan Luka / Kuku, Lainnya (Hanya Observasi)"', 
@@ -93,8 +92,11 @@ def tampilkan_menu_karantina(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_
 
     COLS_MEDIS = ["Tanggal", "Kode Sapi", "RFID/Tag", "Suhu Tubuh (°C)", "Kondisi Klinis", "Tindakan Medis", "Catatan", "Operator"]
 
-    mask_karantina = df_sapi["Lokasi Pen"].str.contains("Karantina|Isolasi", case=False, na=False)
-    df_sapi_karantina = df_sapi[mask_karantina]
+    # Filter Strict: Hanya gunakan populasi sapi berstatus AKTIF
+    df_sapi_aktif = df_sapi[df_sapi["Status"] == "AKTIF"] if "Status" in df_sapi.columns else df_sapi
+
+    mask_karantina = df_sapi_aktif["Lokasi Pen"].str.contains("Karantina|Isolasi", case=False, na=False)
+    df_sapi_karantina = df_sapi_aktif[mask_karantina]
 
     struktur_karantina = {b: p for b, p in STRUKTUR_KANDANG.items() if "karantina" in b.lower() or "isolasi" in b.lower()}
 
@@ -130,9 +132,9 @@ def tampilkan_menu_karantina(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_
                 sapi_di_blok = df_sapi_karantina[df_sapi_karantina["Lokasi Pen"].str.startswith(blok, na=False)]
                 total_sapi_blok = len(sapi_di_blok)
                  
-                with st.expander(f"📂 {blok.upper()} (Total: {total_sapi_blok} Ekor)", expanded=True):
+                with st.expander(f"📂 {blok.upper()} (Total Sapi Aktif: {total_sapi_blok} Ekor)", expanded=True):
                     if total_sapi_blok == 0:
-                        st.caption("ℹ️ Blok kandang ini masih kosong.")
+                        st.caption("ℹ️ Blok kandang ini masih kosong dari sapi aktif.")
                     else:
                         for pen in pens:
                             full_name_pen = f"{blok} - {pen}"
@@ -164,7 +166,7 @@ def tampilkan_menu_karantina(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_
             st.markdown("### 📝 Input Hasil Observasi & Penanganan Medis Manual")
             
             if df_sapi_karantina.empty:
-                st.info("ℹ️ Saat ini tidak ada sapi yang berada di pen Karantina atau Isolasi.")
+                st.info("ℹ️ Saat ini tidak ada sapi aktif yang berada di pen Karantina atau Isolasi.")
             else:
                 mode_input = st.radio(
                     "Pilih Mode Input Tindakan:",
@@ -179,7 +181,7 @@ def tampilkan_menu_karantina(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_
                     opsi_pen = df_sapi_karantina["Lokasi Pen"].dropna().unique().tolist()
                     pen_terpilih = st.selectbox("Pilih Pen Karantina Target (Massal):", opsi_pen)
                     jml_sapi_target = len(df_sapi_karantina[df_sapi_karantina["Lokasi Pen"] == pen_terpilih])
-                    st.info(f"📢 **Rencana Tindakan Massal:** Tindakan medis akan otomatis diterapkan secara SERENTAK ke seluruh **{jml_sapi_target} ekor sapi** di **{pen_terpilih}**.")
+                    st.info(f"📢 **Rencana Tindakan Massal:** Tindakan medis akan otomatis diterapkan secara SERENTAK ke seluruh **{jml_sapi_target} ekor sapi aktif** di **{pen_terpilih}**.")
                 
                 with st.form("form_medis", clear_on_submit=True):
                     col1, col2 = st.columns(2)
@@ -214,7 +216,7 @@ def tampilkan_menu_karantina(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_
                                 df_target = df_sapi_karantina[df_sapi_karantina["Lokasi Pen"] == pen_terpilih]
                             
                             if df_target.empty:
-                                st.error("❌ Gagal Simpan! Tidak ada data sapi yang terdeteksi.")
+                                st.error("❌ Gagal Simpan! Tidak ada data sapi aktif yang terdeteksi.")
                             else:
                                 new_records = []
                                 for _, r in df_target.iterrows():
@@ -250,7 +252,6 @@ def tampilkan_menu_karantina(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_
             st.markdown("### 📥 Import Rekam Medis Karantina via File Excel")
             st.caption("Unggah catatan hasil rekam medis/vaksinasi masal langsung dari file Excel.")
 
-            # Langkah 1: Unduh Template Excel dengan Dropdown
             st.markdown("#### 1. Unduh Template Resmi (Dilengkapi Dropdown Pilihan)")
             bytes_tmpl, ext_tmpl, mime_tmpl = buat_template_excel_karantina()
             st.download_button(
@@ -263,7 +264,6 @@ def tampilkan_menu_karantina(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_
             )
 
             st.markdown("---")
-            # Langkah 2: Unggah File Excel
             st.markdown("#### 2. Unggah File Excel Catatan Petugas Medis")
             uploaded_file = st.file_uploader(
                 "Pilih file Excel (.xlsx / .xls / .csv) yang sudah diisi:", 
@@ -284,8 +284,8 @@ def tampilkan_menu_karantina(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_
                     validation_errors = []
 
                     map_kode_to_rfid = {}
-                    if not df_sapi.empty and "Kode Sapi" in df_sapi.columns and "RFID/Tag" in df_sapi.columns:
-                        for _, sr in df_sapi.iterrows():
+                    if not df_sapi_aktif.empty and "Kode Sapi" in df_sapi_aktif.columns and "RFID/Tag" in df_sapi_aktif.columns:
+                        for _, sr in df_sapi_aktif.iterrows():
                             map_kode_to_rfid[str(sr["Kode Sapi"]).strip()] = str(sr["RFID/Tag"]).strip()
 
                     for idx, r in df_upload.iterrows():
@@ -313,7 +313,7 @@ def tampilkan_menu_karantina(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_
                         if not kode_s or kode_s in ["nan", "None", ""]:
                             err_msg.append("Kode Sapi kosong")
                         elif kode_s not in map_kode_to_rfid:
-                            err_msg.append(f"Kode Sapi '{kode_s}' tidak terdaftar di database master")
+                            err_msg.append(f"Kode Sapi '{kode_s}' tidak ditemukan di populasi sapi aktif")
 
                         if suhu < 30.0 or suhu > 45.0:
                             err_msg.append(f"Suhu {suhu}°C di luar rentang wajar (30 - 45°C)")
@@ -364,13 +364,13 @@ def tampilkan_menu_karantina(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_
                 except Exception as e:
                     st.error(f"❌ Gagal membaca file Excel. Pastikan menggunakan template resmi! Detail Error: {e}")
 
-    # ==================== TAB 2: MUTASI LULUS KARANTINA (MASSAL & SELEKTIF) ====================
+    # ==================== TAB 2: MUTASI LULUS KARANTINA ====================
     with tab2:
         st.markdown("### 🚪 Rilis Sapi ke Pen Penggemukan")
         st.markdown("Gunakan menu ini untuk memindahkan sapi dari Pen Karantina/Isolasi ke Pen Penggemukan secara massal maupun selektif.")
         
         if df_sapi_karantina.empty:
-            st.info("ℹ️ Tidak ada sapi di Pen Karantina yang siap di-mutasi.")
+            st.info("ℹ️ Tidak ada sapi aktif di Pen Karantina yang siap di-mutasi.")
         else:
             daftar_pen_karantina = df_sapi_karantina["Lokasi Pen"].dropna().unique().tolist()
             pen_asal = st.selectbox("Pilih Pen Karantina Asal:", daftar_pen_karantina)
@@ -378,7 +378,7 @@ def tampilkan_menu_karantina(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_
             df_sapi_pen_asal = df_sapi_karantina[df_sapi_karantina["Lokasi Pen"] == pen_asal]
             
             st.markdown("---")
-            st.markdown(f"#### 🐄 Daftar Sapi di **{pen_asal}** ({len(df_sapi_pen_asal)} Ekor)")
+            st.markdown(f"#### 🐄 Daftar Sapi Aktif di **{pen_asal}** ({len(df_sapi_pen_asal)} Ekor)")
             
             opsi_sapi_pen = df_sapi_pen_asal.apply(lambda r: f"{r['Kode Sapi']} - RFID: {r['RFID/Tag']}", axis=1).tolist()
             
@@ -401,13 +401,14 @@ def tampilkan_menu_karantina(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_
                 
             full_tujuan = f"{blok_tujuan} - {pen_tujuan}"
             
-            sapi_di_pen_tujuan = len(df_sapi[df_sapi["Lokasi Pen"] == full_tujuan])
+            # Hitung populasi aktif di pen tujuan
+            sapi_di_pen_tujuan = len(df_sapi_aktif[df_sapi_aktif["Lokasi Pen"] == full_tujuan])
             sisa_kapasitas = 25 - sapi_di_pen_tujuan
             
             if sapi_di_pen_tujuan >= 25:
-                st.error(f"⚠️ Pen **{full_tujuan}** sudah PENUH ({sapi_di_pen_tujuan}/25 Ekor). Silakan pilih pen lain.")
+                st.error(f"⚠️ Pen **{full_tujuan}** sudah PENUH ({sapi_di_pen_tujuan}/25 Ekor Sapi Aktif). Silakan pilih pen lain.")
             else:
-                st.info(f"ℹ️ Pen **{full_tujuan}** saat ini terisi {sapi_di_pen_tujuan}/25 Ekor. Sisa kapasitas: **{sisa_kapasitas} ekor**.")
+                st.info(f"ℹ️ Pen **{full_tujuan}** saat ini terisi {sapi_di_pen_tujuan}/25 Ekor Sapi Aktif. Sisa kapasitas: **{sisa_kapasitas} ekor**.")
             
             if st.button("🚀 Mutasikan Sapi Terpilih Keluar Karantina", type="primary", use_container_width=True):
                 if not sapi_terpilih_list:
@@ -420,6 +421,8 @@ def tampilkan_menu_karantina(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_
                         rfid_m = item.split(" - RFID: ")[1]
                         
                         mask = (df_sapi["Kode Sapi"] == kode_m) & (df_sapi["RFID/Tag"] == rfid_m)
+                        if "Status" in df_sapi.columns:
+                            mask = mask & (df_sapi["Status"] == "AKTIF")
                         df_sapi.loc[mask, "Lokasi Pen"] = full_tujuan
                     
                     save_data(df_sapi)
