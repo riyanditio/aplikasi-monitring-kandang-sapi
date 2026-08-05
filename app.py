@@ -66,11 +66,13 @@ DB_MAPPING = {
     },
     "data_sapi": {
         "columns": {
+            "Kode Batch": "kode_batch",
             "Kode Sapi": "kode_sapi", "RFID/Tag Asal": "rfid_tag_asal", "RFID/Tag": "rfid_tag", "Jenis Sapi": "jenis_sapi",
             "Jenis Kelamin": "jenis_kelamin", "Asal Negara": "asal_negara",
             "Tgl Masuk": "tgl_masuk", "Bobot Awal (kg)": "bobot_awal", "Tgl Cek Akhir": "tgl_cek_akhir",
             "Bobot Akhir (kg)": "bobot_akhir", "ADG (kg/hari)": "adg_kg_hari", "Total Pakan (kg)": "total_pakan_kg",
-            "Tgl Pakan Terakhir": "tgl_pakan_terakhir", "Lokasi Pen": "lokasi_pen"
+            "Tgl Pakan Terakhir": "tgl_pakan_terakhir", "Lokasi Pen": "lokasi_pen",
+            "Status": "status"
         }
     },
     "data_panen": {
@@ -316,12 +318,23 @@ def load_master_pen():
     return df
 
 def load_data():
-    cols = ["Kode Sapi", "RFID/Tag Asal", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Asal Negara", "Tgl Masuk", "Bobot Awal (kg)", "Tgl Cek Akhir", "Bobot Akhir (kg)", "ADG (kg/hari)", "Total Pakan (kg)", "Tgl Pakan Terakhir", "Lokasi Pen"]
+    cols = ["Kode Batch", "Kode Sapi", "RFID/Tag Asal", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Asal Negara", "Tgl Masuk", "Bobot Awal (kg)", "Tgl Cek Akhir", "Bobot Akhir (kg)", "ADG (kg/hari)", "Total Pakan (kg)", "Tgl Pakan Terakhir", "Lokasi Pen", "Status"]
     df = read_sheet_to_df("data_sapi", cols)
-    if df.empty: return pd.DataFrame(columns=cols)
+    if df.empty: 
+        return pd.DataFrame(columns=cols)
+    
+    # Auto-fill default value untuk data eksisting
+    if "Kode Batch" in df.columns:
+        df["Kode Batch"] = df["Kode Batch"].apply(lambda x: "BATCH-2026-01" if str(x).strip() in ["", "None", "nan", "-"] else str(x))
+    if "Status" in df.columns:
+        df["Status"] = df["Status"].apply(lambda x: "AKTIF" if str(x).strip() in ["", "None", "nan", "-"] else str(x))
+        
     return df.reindex(columns=cols)
 
-def save_data(df): write_df_to_sheet("data_sapi", df, ["Kode Sapi", "RFID/Tag Asal", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Asal Negara", "Tgl Masuk", "Bobot Awal (kg)", "Tgl Cek Akhir", "Bobot Akhir (kg)", "ADG (kg/hari)", "Total Pakan (kg)", "Tgl Pakan Terakhir", "Lokasi Pen"])
+def save_data(df): 
+    cols = ["Kode Batch", "Kode Sapi", "RFID/Tag Asal", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Asal Negara", "Tgl Masuk", "Bobot Awal (kg)", "Tgl Cek Akhir", "Bobot Akhir (kg)", "ADG (kg/hari)", "Total Pakan (kg)", "Tgl Pakan Terakhir", "Lokasi Pen", "Status"]
+    write_df_to_sheet("data_sapi", df, cols)
+
 def load_panen_data(): return read_sheet_to_df("data_panen", ["Kode Sapi", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Asal Negara", "Tgl Masuk", "Tgl Panen", "Lama Pelihara (Hari)", "Bobot Awal (kg)", "Bobot Panen (kg)", "Total Gain (kg)", "Total Pakan (kg)", "FCR Akhir", "ADG Akhir (kg/hari)", "Harga Jual /kg (Rp)", "Total Pendapatan (Rp)", "Pembeli/Tujuan"])
 def save_panen_data(df): write_df_to_sheet("data_panen", df, ["Kode Sapi", "RFID/Tag", "Jenis Sapi", "Jenis Kelamin", "Asal Negara", "Tgl Masuk", "Tgl Panen", "Lama Pelihara (Hari)", "Bobot Awal (kg)", "Bobot Panen (kg)", "Total Gain (kg)", "Total Pakan (kg)", "FCR Akhir", "ADG Akhir (kg/hari)", "Harga Jual /kg (Rp)", "Total Pendapatan (Rp)", "Pembeli/Tujuan"])
 
