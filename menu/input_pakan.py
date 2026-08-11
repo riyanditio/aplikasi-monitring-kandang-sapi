@@ -34,27 +34,17 @@ def kelompokkan_jenis_pakan(nama_pakan, df_master_pakan=None):
         match = df_master_pakan[df_master_pakan["Nama Pakan"].astype(str).str.strip().str.lower() == nama]
         if not match.empty:
             kat = str(match.iloc[0]["Kategori"]).lower()
-            if "konsentrat" in kat:
-                return "Konsentrat (kg)"
-            elif "hijauan" in kat:
-                return "Hijauan (kg)"
-            elif "jerami" in kat:
-                return "Jerami (kg)"
-            elif "silase" in kat:
-                return "Silase (kg)"
-            else:
-                return "Lainnya / Suplemen (kg)"
+            if "konsentrat" in kat: return "Konsentrat (kg)"
+            elif "hijauan" in kat: return "Hijauan (kg)"
+            elif "jerami" in kat: return "Jerami (kg)"
+            elif "silase" in kat: return "Silase (kg)"
+            else: return "Lainnya / Suplemen (kg)"
 
-    if "konsentrat" in nama or "tum" in nama:
-        return "Konsentrat (kg)"
-    elif "hijauan" in nama or "rumput" in nama or "odot" in nama or "gajah" in nama:
-        return "Hijauan (kg)"
-    elif "jerami" in nama:
-        return "Jerami (kg)"
-    elif "silase" in nama:
-        return "Silase (kg)"
-    else:
-        return "Lainnya / Suplemen (kg)"
+    if "konsentrat" in nama or "tum" in nama: return "Konsentrat (kg)"
+    elif "hijauan" in nama or "rumput" in nama or "odot" in nama or "gajah" in nama: return "Hijauan (kg)"
+    elif "jerami" in nama: return "Jerami (kg)"
+    elif "silase" in nama: return "Silase (kg)"
+    else: return "Lainnya / Suplemen (kg)"
 
 
 # ==================== GENERATOR EXCEL REKAPITULASI DRAFT ====================
@@ -63,11 +53,7 @@ def buat_excel_rekapitulasi_pakan(df_rekap_pivoted, summary_data):
     buffer = io.BytesIO()
     try:
         openpyxl = importlib.import_module("openpyxl")
-        Font = openpyxl.styles.Font
-        Alignment = openpyxl.styles.Alignment
-        PatternFill = openpyxl.styles.PatternFill
-        Border = openpyxl.styles.Border
-        Side = openpyxl.styles.Side
+        Font, Alignment, PatternFill, Border, Side = openpyxl.styles.Font, openpyxl.styles.Alignment, openpyxl.styles.PatternFill, openpyxl.styles.Border, openpyxl.styles.Side
 
         wb = openpyxl.Workbook()
         ws = wb.active
@@ -78,13 +64,7 @@ def buat_excel_rekapitulasi_pakan(df_rekap_pivoted, summary_data):
         header_font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
         data_font = Font(name="Calibri", size=10)
         total_font = Font(name="Calibri", size=10, bold=True)
-
-        thin_border = Border(
-            left=Side(style='thin', color='D9D9D9'),
-            right=Side(style='thin', color='D9D9D9'),
-            top=Side(style='thin', color='D9D9D9'),
-            bottom=Side(style='thin', color='D9D9D9')
-        )
+        thin_border = Border(left=Side(style='thin', color='D9D9D9'), right=Side(style='thin', color='D9D9D9'), top=Side(style='thin', color='D9D9D9'), bottom=Side(style='thin', color='D9D9D9'))
 
         ws.cell(row=1, column=1, value="No")
         ws.cell(row=1, column=2, value="Tanggal")
@@ -95,14 +75,8 @@ def buat_excel_rekapitulasi_pakan(df_rekap_pivoted, summary_data):
         ws.cell(row=1, column=11, value="Jumlah Sapi")
         ws.cell(row=1, column=12, value="Konsumsi per ekor (Kg)")
 
-        ws.merge_cells("A1:A2")
-        ws.merge_cells("B1:B2")
-        ws.merge_cells("C1:C2")
-        ws.merge_cells("D1:D2")
-        ws.merge_cells("E1:I1")
-        ws.merge_cells("J1:J2")
-        ws.merge_cells("K1:K2")
-        ws.merge_cells("L1:L2")
+        ws.merge_cells("A1:A2"); ws.merge_cells("B1:B2"); ws.merge_cells("C1:C2"); ws.merge_cells("D1:D2")
+        ws.merge_cells("E1:I1"); ws.merge_cells("J1:J2"); ws.merge_cells("K1:K2"); ws.merge_cells("L1:L2")
 
         ws.cell(row=2, column=5, value="Konsentrat (Kg)")
         ws.cell(row=2, column=6, value="Hijauan (Kg)")
@@ -124,13 +98,11 @@ def buat_excel_rekapitulasi_pakan(df_rekap_pivoted, summary_data):
             ws.cell(row=curr_row, column=2, value=str(r["Tanggal"])).alignment = Alignment(horizontal="center")
             ws.cell(row=curr_row, column=3, value=str(r["Lokasi Kandang / Pen"])).alignment = Alignment(horizontal="left")
             ws.cell(row=curr_row, column=4, value=str(r["Metode Pakan"])).alignment = Alignment(horizontal="center")
-
             ws.cell(row=curr_row, column=5, value=float(r["Konsentrat (kg)"])).number_format = '#,##0.00'
             ws.cell(row=curr_row, column=6, value=float(r["Hijauan (kg)"])).number_format = '#,##0.00'
             ws.cell(row=curr_row, column=7, value=float(r["Jerami (kg)"])).number_format = '#,##0.00'
             ws.cell(row=curr_row, column=8, value=float(r["Silase (kg)"])).number_format = '#,##0.00'
             ws.cell(row=curr_row, column=9, value=float(r["Lainnya / Suplemen (kg)"])).number_format = '#,##0.00'
-
             ws.cell(row=curr_row, column=10, value=float(r["Total Pakan (kg)"])).number_format = '#,##0.00'
             ws.cell(row=curr_row, column=11, value=int(r["Jumlah Sapi"])).number_format = '#,##0'
             ws.cell(row=curr_row, column=12, value=float(r["Konsumsi per Ekor (kg)"])).number_format = '#,##0.00'
@@ -141,7 +113,6 @@ def buat_excel_rekapitulasi_pakan(df_rekap_pivoted, summary_data):
                 cell.border = thin_border
             curr_row += 1
 
-        # Row TOTAL
         ws.cell(row=curr_row, column=1, value="TOTAL").alignment = Alignment(horizontal="center")
         ws.merge_cells(start_row=curr_row, start_column=1, end_row=curr_row, end_column=4)
 
@@ -150,7 +121,6 @@ def buat_excel_rekapitulasi_pakan(df_rekap_pivoted, summary_data):
         ws.cell(row=curr_row, column=7, value=float(summary_data["tot_jerami"])).number_format = '#,##0.00'
         ws.cell(row=curr_row, column=8, value=float(summary_data["tot_silase"])).number_format = '#,##0.00'
         ws.cell(row=curr_row, column=9, value=float(summary_data["tot_lainnya"])).number_format = '#,##0.00'
-
         ws.cell(row=curr_row, column=10, value=float(summary_data["tot_semua"])).number_format = '#,##0.00'
         ws.cell(row=curr_row, column=11, value=int(summary_data["tot_sapi"])).number_format = '#,##0'
         ws.cell(row=curr_row, column=12, value=float(summary_data["rerata_per_ekor"])).number_format = '#,##0.00'
@@ -171,34 +141,30 @@ def buat_excel_rekapitulasi_pakan(df_rekap_pivoted, summary_data):
 
 # ==================== GENERATOR TEMPLATE UPLOAD PAKAN ====================
 def buat_template_excel_pakan(STRUKTUR_KANDANG, list_pakan_master):
-    """Membuat file Excel template Input Pakan Harian dengan Dropdown Pakan Dinamis."""
     buffer = io.BytesIO()
-    
     blok_default = list(STRUKTUR_KANDANG.keys())[0] if STRUKTUR_KANDANG else "Blok Karantina"
     pen_default = STRUKTUR_KANDANG[blok_default][0] if (STRUKTUR_KANDANG and STRUKTUR_KANDANG[blok_default]) else "Pen Karantina 1"
     pakan_sample = list_pakan_master[0] if list_pakan_master else "Konsentrat Hijau"
 
-    sample_data = [
-        {
-            "Tanggal (YYYY-MM-DD)": datetime.now().strftime("%Y-%m-%d"),
-            "Blok Kandang": blok_default,
-            "Nomor Pen": pen_default,
-            "Metode Pemberian": "Serentak",
-            "Kode Sapi Target (Jika Spesifik)": "-",
-            "Jenis Pakan": pakan_sample,
-            "Kuantitas Pakan (kg)": 5.5
-        }
-    ]
+    sample_data = [{
+        "Tanggal (YYYY-MM-DD)": datetime.now().strftime("%Y-%m-%d"),
+        "Blok Kandang": blok_default,
+        "Nomor Pen": pen_default,
+        "Metode Pemberian": "Serentak",
+        "Kode Sapi Target (Jika Spesifik)": "-",
+        "Jenis Pakan": pakan_sample,
+        "Kuantitas Pakan (kg)": 5.5
+    }]
     df_sample = pd.DataFrame(sample_data)
 
     panduan_data = [
-        {"KOLOM": "Tanggal (YYYY-MM-DD)", "ATURAN PENGISIAN": "WAJIB DIISI. Format tanggal distribusi pakan: YYYY-MM-DD (contoh: 2026-08-04)."},
-        {"KOLOM": "Blok Kandang", "ATURAN PENGISIAN": f"HARUS SAMA PERSIS DENGAN MASTER BLOK: {', '.join(list(STRUKTUR_KANDANG.keys()))}"},
-        {"KOLOM": "Nomor Pen", "ATURAN PENGISIAN": "WAJIB DIISI. Nama Pen lokasi kandang (contoh: Pen Karantina 1, Pen A1)."},
-        {"KOLOM": "Metode Pemberian", "ATURAN PENGISIAN": "PILIH DARI DROPDOWN EXCEL: 'Serentak' atau 'Spesifik'."},
-        {"KOLOM": "Kode Sapi Target (Jika Spesifik)", "ATURAN PENGISIAN": "DIISI JIKA METODE = 'Spesifik'. Ketik Kode Sapi target (contoh: S5-002). Isikan '-' jika Metode = 'Serentak'."},
-        {"KOLOM": "Jenis Pakan", "ATURAN PENGISIAN": f"PILIH DARI DROPDOWN EXCEL: {', '.join(list_pakan_master[:10])}"},
-        {"KOLOM": "Kuantitas Pakan (kg)", "ATURAN PENGISIAN": "WAJIB DIISI. Jika Serentak: isikan jatah kg/ekor. Jika Spesifik: isikan total kg untuk sapi tersebut."}
+        {"KOLOM": "Tanggal (YYYY-MM-DD)", "ATURAN PENGISIAN": "WAJIB DIISI. Format tanggal distribusi pakan: YYYY-MM-DD."},
+        {"KOLOM": "Blok Kandang", "ATURAN PENGISIAN": f"HARUS SAMA PERSIS MASTER: {', '.join(list(STRUKTUR_KANDANG.keys()))}"},
+        {"KOLOM": "Nomor Pen", "ATURAN PENGISIAN": "WAJIB DIISI. Nama Pen lokasi kandang."},
+        {"KOLOM": "Metode Pemberian", "ATURAN PENGISIAN": "PILIH DROPDOWN: 'Serentak' atau 'Spesifik'."},
+        {"KOLOM": "Kode Sapi Target (Jika Spesifik)", "ATURAN PENGISIAN": "Isi Kode Sapi jika Spesifik. Isi '-' jika Serentak."},
+        {"KOLOM": "Jenis Pakan", "ATURAN PENGISIAN": f"PILIH DROPDOWN: {', '.join(list_pakan_master[:10])}"},
+        {"KOLOM": "Kuantitas Pakan (kg)", "ATURAN PENGISIAN": "WAJIB DIISI. Jumlah pakan (kg)."}
     ]
     df_panduan = pd.DataFrame(panduan_data)
 
@@ -213,12 +179,10 @@ def buat_template_excel_pakan(STRUKTUR_KANDANG, list_pakan_master):
             wb = writer.book
             ws_input = wb['FORM_INPUT_PAKAN_HARIAN']
 
-            # Dropdown Metode
             dv_metode = DataValidation(type="list", formula1='"Serentak, Spesifik"', allow_blank=True)
             ws_input.add_data_validation(dv_metode)
             dv_metode.add("D2:D500")
 
-            # Dropdown Jenis Pakan Dinamis dari Supabase
             str_pakan_formula = f'"{", ".join(list_pakan_master[:15])}"'
             dv_pakan = DataValidation(type="list", formula1=str_pakan_formula, allow_blank=True)
             ws_input.add_data_validation(dv_pakan)
@@ -241,15 +205,20 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
     if "uploader_key_pakan" not in st.session_state:
         st.session_state["uploader_key_pakan"] = 0
 
+    # Proteksi dasar kolom master
+    if "Total Pakan (kg)" not in df_sapi.columns:
+        df_sapi["Total Pakan (kg)"] = 0.0
     df_sapi["Total Pakan (kg)"] = pd.to_numeric(df_sapi["Total Pakan (kg)"], errors='coerce').fillna(0.0).astype(float)
     
-    # Filter Strict: Hanya gunakan populasi sapi yang berstatus AKTIF
+    if "Tgl Pakan Terakhir" not in df_sapi.columns:
+        df_sapi["Tgl Pakan Terakhir"] = "-"
+
+    # Filter Strict: Hanya gunakan populasi sapi AKTIF
     df_sapi_aktif = df_sapi[df_sapi["Status"] == "AKTIF"] if "Status" in df_sapi.columns else df_sapi
 
     COLS_PAKAN = ["Tanggal", "Lokasi Pen", "Metode", "Target Spesifik", "Jenis Pakan", "Jumlah Pakan (kg)", "Operator"]
     COLS_MASTER_PAK = ["Nama Pakan", "Kategori"]
 
-    # Load master jenis pakan dari Supabase
     df_master_pakan = load_master_pakan(read_sheet_to_df)
     list_pakan_opsi = df_master_pakan["Nama Pakan"].dropna().unique().tolist()
     if not list_pakan_opsi:
@@ -259,7 +228,6 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
     
     # ==================== TAB 1: INPUT PAKAN BARU ====================
     with tab1:
-        # PANEL MASTER PAKAN (EXPANDER SUPABASE)
         with st.expander("🌾 Kelola & Tambah Jenis / Formula Pakan Baru (Database Supabase)"):
             st.caption("Tambahkan jenis pakan baru di sini agar otomatis terintegrasi ke form input, template Excel, dan rekapitulasi.")
             col_m1, col_m2, col_m3 = st.columns([2, 2, 1.2])
@@ -369,7 +337,7 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                                     
                                 df_sapi.loc[mask_update_serentak, "Total Pakan (kg)"] += float(pakan_per_ekor)
                                 df_sapi.loc[mask_update_serentak, "Tgl Pakan Terakhir"] = str(tgl_pakan)
-                                detail_sukses = f"Mendistribusikan Serentak {jenis_pakan} (@{pakan_per_ekor} kg/ekor) ke {lokasi_pen_full} (Dicatat individual untuk {jumlah_sapi} ekor)"
+                                detail_sukses = f"Mendistribusikan Serentak {jenis_pakan} (@{pakan_per_ekor} kg/ekor) ke {lokasi_pen_full} ({jumlah_sapi} ekor)"
                             else:
                                 row_pakan_baru = {
                                     "Tanggal": str(tgl_pakan),
@@ -384,7 +352,7 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                                 target_kode = pilihan_sapi.split(" - ")[0]
                                 target_rfid = pilihan_sapi.split(" - ")[1]
                                 
-                                mask_spesifik = (df_sapi["Kode Sapi"] == target_kode) & (df_sapi["RFID/Tag"] == target_rfid)
+                                mask_spesifik = (df_sapi["Kode Sapi"].astype(str) == target_kode) & (df_sapi["RFID/Tag"].astype(str) == target_rfid)
                                 if "Status" in df_sapi.columns:
                                     mask_spesifik = mask_spesifik & (df_sapi["Status"] == "AKTIF")
                                     
@@ -487,25 +455,31 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                     df_valid_only = df_preview[df_preview["Status Validasi"] == "✅ SIAP SIMPAN"].drop(columns=["Status Validasi"])
                     if not df_valid_only.empty:
                         if st.button(f"🚀 Simpan {len(df_valid_only)} Log Pakan Valid", type="primary", use_container_width=True):
-                            with st.spinner("💾 Mengunggah ke database..."):
+                            with st.spinner("💾 Mengunggah ke database & memperbarui master sapi..."):
+                                # 1. Simpan ke riwayat pakan
                                 df_pakan_existing = read_sheet_to_df("pakan_harian", COLS_PAKAN)
                                 df_baru_total = pd.concat([df_pakan_existing, df_valid_only], ignore_index=True)
                                 write_df_to_sheet("pakan_harian", df_baru_total, COLS_PAKAN)
 
+                                # 2. Update master df_sapi secara aman dari tipe data non-numeric
+                                df_sapi["Total Pakan (kg)"] = pd.to_numeric(df_sapi["Total Pakan (kg)"], errors='coerce').fillna(0.0).astype(float)
+                                if "Tgl Pakan Terakhir" not in df_sapi.columns:
+                                    df_sapi["Tgl Pakan Terakhir"] = "-"
+
                                 for (k_sapi, r_sapi), add_kg in updates_sapi_dict.items():
-                                    mask_sp = (df_sapi["Kode Sapi"].astype(str) == k_sapi) & (df_sapi["RFID/Tag"].astype(str) == r_sapi)
+                                    mask_sp = (df_sapi["Kode Sapi"].astype(str) == str(k_sapi)) & (df_sapi["RFID/Tag"].astype(str) == str(r_sapi))
                                     if "Status" in df_sapi.columns:
                                         mask_sp = mask_sp & (df_sapi["Status"] == "AKTIF")
                                         
                                     df_sapi.loc[mask_sp, "Total Pakan (kg)"] += float(add_kg)
                                     if (k_sapi, r_sapi) in last_pakan_date_dict:
-                                        df_sapi.loc[mask_sp, "Tgl Pakan Terakhir"] = last_pakan_date_dict[(k_sapi, r_sapi)]
+                                        df_sapi.loc[mask_sp, "Tgl Pakan Terakhir"] = str(last_pakan_date_dict[(k_sapi, r_sapi)])
 
                                 save_data(df_sapi)
                                 add_activity_log(user_name, "Batch Input Pakan", f"Mengunggah {len(df_valid_only)} record pakan")
                             
                             st.session_state["uploader_key_pakan"] += 1
-                            st.toast("🎉 Berhasil menyimpan pakan!", icon="🚀")
+                            st.toast("🎉 Berhasil menyimpan pakan & memperbarui master sapi!", icon="🚀")
                             st.rerun()
                 except Exception as e:
                     st.error(f"❌ Error upload file: {e}")
@@ -549,11 +523,12 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                 elif not jenis_baru or jumlah_baru <= 0: st.error("❌ Nama & berat pakan harus valid.")
                 else:
                     with st.spinner("🔄 Memproses kalkulasi ulang..."):
-                        # Kurangi nilai pakan lama dari sapi target
+                        df_sapi["Total Pakan (kg)"] = pd.to_numeric(df_sapi["Total Pakan (kg)"], errors='coerce').fillna(0.0).astype(float)
+                        
                         if target_lama != "-" and " - " in str(target_lama):
                             target_kode = str(target_lama).split(" - ")[0]
                             target_rfid = str(target_lama).split(" - ")[1]
-                            mask_tarik = (df_sapi["Kode Sapi"] == target_kode) & (df_sapi["RFID/Tag"] == target_rfid)
+                            mask_tarik = (df_sapi["Kode Sapi"].astype(str) == target_kode) & (df_sapi["RFID/Tag"].astype(str) == target_rfid)
                             if "Status" in df_sapi.columns:
                                 mask_tarik = mask_tarik & (df_sapi["Status"] == "AKTIF")
                             df_sapi.loc[mask_tarik, "Total Pakan (kg)"] -= float(row_lama["Jumlah Pakan (kg)"])
@@ -567,11 +542,10 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                         
                         df_sapi["Total Pakan (kg)"] = df_sapi["Total Pakan (kg)"].clip(lower=0.0)
 
-                        # Tambahkan nilai pakan baru ke sapi target
                         if target_lama != "-" and " - " in str(target_lama):
                             target_kode = str(target_lama).split(" - ")[0]
                             target_rfid = str(target_lama).split(" - ")[1]
-                            mask_tambah = (df_sapi["Kode Sapi"] == target_kode) & (df_sapi["RFID/Tag"] == target_rfid)
+                            mask_tambah = (df_sapi["Kode Sapi"].astype(str) == target_kode) & (df_sapi["RFID/Tag"].astype(str) == target_rfid)
                             if "Status" in df_sapi.columns:
                                 mask_tambah = mask_tambah & (df_sapi["Status"] == "AKTIF")
                             df_sapi.loc[mask_tambah, "Total Pakan (kg)"] += float(jumlah_baru)
@@ -596,10 +570,11 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
                 if pwd_input != correct_admin_pwd: st.error("❌ Password Admin salah.")
                 else:
                     with st.spinner("🔄 Menghapus record pakan..."):
+                        df_sapi["Total Pakan (kg)"] = pd.to_numeric(df_sapi["Total Pakan (kg)"], errors='coerce').fillna(0.0).astype(float)
                         if target_lama != "-" and " - " in str(target_lama):
                             target_kode = str(target_lama).split(" - ")[0]
                             target_rfid = str(target_lama).split(" - ")[1]
-                            mask_tarik = (df_sapi["Kode Sapi"] == target_kode) & (df_sapi["RFID/Tag"] == target_rfid)
+                            mask_tarik = (df_sapi["Kode Sapi"].astype(str) == target_kode) & (df_sapi["RFID/Tag"].astype(str) == target_rfid)
                             if "Status" in df_sapi.columns:
                                 mask_tarik = mask_tarik & (df_sapi["Status"] == "AKTIF")
                             df_sapi.loc[mask_tarik, "Total Pakan (kg)"] -= float(row_lama["Jumlah Pakan (kg)"])
@@ -676,7 +651,6 @@ def tampilkan_menu_pakan(df_sapi, STRUKTUR_KANDANG, save_data, add_activity_log,
             else:
                 df_f["Kategori Pakan"] = df_f["Jenis Pakan"].apply(lambda p: kelompokkan_jenis_pakan(p, df_master_pakan))
 
-                # Hitung jumlah populasi sapi AKTIF per pen
                 pen_counts = df_sapi_aktif["Lokasi Pen"].value_counts().to_dict()
 
                 pivot_df = df_f.pivot_table(
