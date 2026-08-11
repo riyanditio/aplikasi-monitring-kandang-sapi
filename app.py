@@ -307,7 +307,6 @@ def load_master_pen():
     cols = ["Blok", "Pen"]
     df = read_sheet_to_df("master_pen", cols)
     
-    # Keterangan nama blok baru tanpa tanda kurung bobot
     if df.empty:
         df = pd.DataFrame([
             {"Blok": "Blok Karantina", "Pen": "Pen Karantina 1"}, {"Blok": "Blok Karantina", "Pen": "Pen Karantina 2"},
@@ -319,7 +318,14 @@ def load_master_pen():
         write_df_to_sheet("master_pen", df, cols)
     else:
         # Bersihkan nama blok lama jika ada tanda kurung bobot
-        df["Blok"] = df["Blok"].astype(str).apply(lambda x: re.sub(r'\s*\([^)]*\)', '', x).strip())
+        df_cleaned = df.copy()
+        df_cleaned["Blok"] = df_cleaned["Blok"].astype(str).apply(lambda x: re.sub(r'\s*\([^)]*\)', '', x).strip())
+        
+        # Otomatis update ke Supabase jika ditemukan perubahan format nama blok
+        if not df_cleaned.equals(df):
+            write_df_to_sheet("master_pen", df_cleaned, cols)
+            df = df_cleaned
+
     return df
 
 def load_data():
@@ -334,7 +340,7 @@ def load_data():
     if "Status" in df.columns:
         df["Status"] = df["Status"].apply(lambda x: "AKTIF" if str(x).strip() in ["", "None", "nan", "-"] else str(x))
         
-    # Pembersihan otomatis teks bobot dalam kurung pada lokasi pen di database Supabase
+    # Pembersihan otomatis teks bobot dalam kurung pada lokasi pen
     if "Lokasi Pen" in df.columns:
         df["Lokasi Pen"] = df["Lokasi Pen"].astype(str).apply(lambda x: re.sub(r'\s*\([^)]*\)', '', x).strip())
         
