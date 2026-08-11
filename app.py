@@ -306,15 +306,20 @@ def save_jenis_sapi(list_jenis): write_df_to_sheet("jenis_sapi", pd.DataFrame({"
 def load_master_pen():
     cols = ["Blok", "Pen"]
     df = read_sheet_to_df("master_pen", cols)
+    
+    # Keterangan nama blok baru tanpa tanda kurung bobot
     if df.empty:
         df = pd.DataFrame([
             {"Blok": "Blok Karantina", "Pen": "Pen Karantina 1"}, {"Blok": "Blok Karantina", "Pen": "Pen Karantina 2"},
-            {"Blok": "Blok Penggemukan A (Bobot < 350kg)", "Pen": "Pen A1"}, {"Blok": "Blok Penggemukan A (Bobot < 350kg)", "Pen": "Pen A2"},
-            {"Blok": "Blok Penggemukan B (Bobot 350-450kg)", "Pen": "Pen B1"}, {"Blok": "Blok Penggemukan B (Bobot 350-450kg)", "Pen": "Pen B2"},
-            {"Blok": "Blok Penggemukan C (Bobot > 450kg)", "Pen": "Pen C1"}, {"Blok": "Blok Penggemukan C (Bobot > 450kg)", "Pen": "Pen C2"},
-            {"Blok": "Blok Isolasi & Perawatan (Sakit)", "Pen": "Pen Isolasi 1"}
+            {"Blok": "Blok Penggemukan A", "Pen": "Pen A1"}, {"Blok": "Blok Penggemukan A", "Pen": "Pen A2"},
+            {"Blok": "Blok Penggemukan B", "Pen": "Pen B1"}, {"Blok": "Blok Penggemukan B", "Pen": "Pen B2"},
+            {"Blok": "Blok Penggemukan C", "Pen": "Pen C1"}, {"Blok": "Blok Penggemukan C", "Pen": "Pen C2"},
+            {"Blok": "Blok Isolasi", "Pen": "Pen Isolasi 1"}
         ])
         write_df_to_sheet("master_pen", df, cols)
+    else:
+        # Bersihkan nama blok lama jika ada tanda kurung bobot
+        df["Blok"] = df["Blok"].astype(str).apply(lambda x: re.sub(r'\s*\([^)]*\)', '', x).strip())
     return df
 
 def load_data():
@@ -328,6 +333,10 @@ def load_data():
         df["Kode Batch"] = df["Kode Batch"].apply(lambda x: "BATCH-2026-01" if str(x).strip() in ["", "None", "nan", "-"] else str(x))
     if "Status" in df.columns:
         df["Status"] = df["Status"].apply(lambda x: "AKTIF" if str(x).strip() in ["", "None", "nan", "-"] else str(x))
+        
+    # Pembersihan otomatis teks bobot dalam kurung pada lokasi pen di database Supabase
+    if "Lokasi Pen" in df.columns:
+        df["Lokasi Pen"] = df["Lokasi Pen"].astype(str).apply(lambda x: re.sub(r'\s*\([^)]*\)', '', x).strip())
         
     return df.reindex(columns=cols)
 
