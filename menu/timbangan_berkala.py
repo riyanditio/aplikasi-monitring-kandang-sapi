@@ -4,6 +4,7 @@ from datetime import datetime
 import numpy as np
 from PIL import Image, ImageDraw
 import gc
+import io
 
 # ==================== FUNGSI EKSTRAKSI AI MORFOMETRIK & ANOTASI VISUAL ====================
 def estimasi_bobot_dari_foto(image_file, jarak_kamera_m=2.5):
@@ -155,215 +156,335 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
             total_sapi_pen = len(df_sapi_terfilter)
             sapi_terhitung = len(df_sapi_terfilter) - len(df_sapi_belum_timbang)
 
-            if df_sapi_belum_timbang.empty:
-                st.success(f"🎉 **SELESAI!** Seluruh **{total_sapi_pen} ekor sapi aktif** di **{lokasi_pencarian}** telah selesai ditimbang pada tanggal **{tgl_timbang_str}**.")
-                
-                with st.expander("🔍 Lihat Daftar Sapi yang Sudah Ditimbang Hari Ini di Pen Ini"):
-                    df_sudah_show = df_sapi_terfilter.sort_values(by="Kode Sapi", ascending=True)
-                    st.dataframe(df_sudah_show[["Kode Sapi", "RFID/Tag", "Jenis Sapi", "Bobot Akhir (kg)", "ADG (kg/hari)", "Tgl Cek Akhir"]], use_container_width=True, hide_index=True)
-            else:
-                st.caption(f"📊 Progress Penimbangan Pen **{lokasi_pencarian}**: Terproses **{sapi_terhitung} dari {total_sapi_pen} ekor** ({len(df_sapi_belum_timbang)} ekor tersisa di daftar).")
-                
-                opsi_sapi = df_sapi_belum_timbang.apply(lambda r: f"{r['Kode Sapi']} - RFID: {r['RFID/Tag']}", axis=1).tolist()
-                sapi_pilihan = st.selectbox("Pilih Kode Sapi Yang Ditimbang:", opsi_sapi)
-                
-                kode_sapi_asli = sapi_pilihan.split(" - RFID: ")[0]
-                rfid_sapi_asli = sapi_pilihan.split(" - RFID: ")[1]
-                
-                matched_rows = df_sapi_belum_timbang[(df_sapi_belum_timbang["Kode Sapi"] == kode_sapi_asli) & (df_sapi_belum_timbang["RFID/Tag"] == rfid_sapi_asli)]
-                if matched_rows.empty:
-                    st.error("⚠️ Data sapi aktif tidak ditemukan di database master.")
-                else:
-                    row_sapi = matched_rows.iloc[0]
+            st.markdown("---")
+            
+            # --- OPSI PILIHAN METODE PENIMBANGAN ---
+            metode_penimbangan = st.radio(
+                "PILIH METODE PENIMBANGAN:",
+                [
+                    "⚖️ Timbangan Fisik (Manual)", 
+                    "📸 Pemindaian Foto / LiDAR (Visual AI)", 
+                    "📥 Upload / Download Template Excel (Batch Pen)"
+                ],
+                horizontal=True
+            )
 
-                    is_penimbangan_pertama = (str(row_sapi['Tgl Cek Akhir']) == str(row_sapi['Tgl Masuk']))
-                    status_timbang_text = "🟢 PENIMBANGAN PERTAMA (Evaluasi Awal Masa Karantina)" if is_penimbangan_pertama else "🔵 PENIMBANGAN BERKALA / RUTIN"
+            # ==================== METODE 3: BATCH EXCEL TEMPLATE ====================
+            if metode_penimbangan == "📥 Upload / Download Template Excel (Batch Pen)":
+                st.markdown("##### 📥 Modul Penimbangan Massal Excel (Auto-Populate Data Sapi)")
+                st.caption(f"Unduh file Excel yang berisi daftar **{total_sapi_pen} ekor sapi aktif** di **{lokasi_pencarian}**, isi bobot baru, lalu unggah kembali untuk kalkulasi masif.")
 
-                    st.info(f"📋 **Data Historis Sapi:** ({status_timbang_text})\n* Tanggal Masuk Area: {row_sapi['Tgl Masuk']} | Berat Awal: {row_sapi['Bobot Awal (kg)']} kg\n* RFID Asal: {row_sapi.get('RFID/Tag Asal', '-')} | RFID Baru: {row_sapi['RFID/Tag']}\n* Timbangan Terakhir: {row_sapi['Tgl Cek Akhir']} | Berat Akhir: {row_sapi['Bobot Akhir (kg)']} kg")
+                c_ex1, c_ex2 = st.columns(2)
 
-                    st.markdown("---")
+                # --- STEP 1: DOWNLOAD TEMPLATE EXCEL DINAMIS ---
+                with c_ex1:
+                    st.markdown("**Langkah 1: Unduh Template Excel Pre-filled**")
                     
-                    # --- OPSI PILIHAN METODE PENIMBANGAN ---
-                    metode_penimbangan = st.radio(
-                        "PILIH METODE PENIMBANGAN:",
-                        ["⚖️ Timbangan Fisik (Manual)", "📸 Pemindaian Foto / LiDAR (Visual AI)"],
-                        horizontal=True
+                    df_template = df_sapi_terfilter.sort_values(by="Kode Sapi", ascending=True).copy()
+                    df_template_export = pd.DataFrame({
+                        "Kode Sapi": df_template["Kode Sapi"],
+                        "RFID/Tag": df_template["RFID/Tag"],
+                        "Jenis Sapi": df_template["Jenis Sapi"],
+                        "Lokasi Pen": df_template["Lokasi Pen"],
+                        "Bobot Terakhir (kg)": df_template["Bobot Akhir (kg)"],
+                        "Tanggal Timbang (YYYY-MM-DD)": tgl_timbang_str,
+                        "Bobot Baru (kg)": ""
+                    })
+
+                    buffer = io.BytesIO()
+                    try:
+                        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                            df_template_export.to_excel(writer, index=False, sheet_name='Data_Penimbangan')
+                    except Exception:
+                        with pd.ExcelWriter(buffer) as writer:
+                            df_template_export.to_excel(writer, index=False, sheet_name='Data_Penimbangan')
+
+                    st.download_button(
+                        label=f"📥 Unduh Template Excel ({lokasi_pencarian})",
+                        data=buffer.getvalue(),
+                        file_name=f"Template_Timbang_{lokasi_pencarian.replace(' ', '_').replace('/', '_')}_{tgl_timbang_str}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True,
+                        type="primary"
                     )
 
-                    bobot_default_val = float(row_sapi["Bobot Akhir (kg)"])
+                # --- STEP 2: UPLOAD & PROCESS EXCEL HASIL ISIAN ---
+                with c_ex2:
+                    st.markdown("**Langkah 2: Unggah File Excel Yang Sudah Diisi**")
+                    file_excel = st.file_uploader("Pilih file Excel yang sudah diisi bobot baru:", type=["xlsx", "xls"], key="up_excel_timbang")
 
-                    # --- JIKA METODE PEMINDAIAN FOTO DIPIIH ---
-                    if metode_penimbangan == "📸 Pemindaian Foto / LiDAR (Visual AI)":
-                        st.markdown("##### 📸 Modul Pemindaian Visual AI & Depth LiDAR")
-                        st.caption("📱 **Penting:** Pegang HP dalam posisi **Horizontal (Landscape)**. Kamera Utama / Belakang akan otomatis diaktifkan.")
+                if file_excel is not None:
+                    try:
+                        df_up = pd.read_excel(file_excel)
+                        req_cols = ["Kode Sapi", "RFID/Tag", "Bobot Baru (kg)"]
+                        
+                        if not all(col in df_up.columns for col in req_cols):
+                            st.error(f"❌ Format file Excel tidak sesuai. Pastikan terdapat kolom: {', '.join(req_cols)}")
+                        else:
+                            df_up_valid = df_up.dropna(subset=["Bobot Baru (kg)"]).copy()
+                            df_up_valid["Bobot Baru (kg)"] = pd.to_numeric(df_up_valid["Bobot Baru (kg)"], errors='coerce')
+                            df_up_valid = df_up_valid[df_up_valid["Bobot Baru (kg)"] > 0]
 
-                        st.markdown("""
-                        <style>
-                        div[data-testid="stCameraInput"] {
-                            position: relative !important;
-                            border: 2px dashed #00FF66 !important;
-                            border-radius: 12px !important;
-                            padding: 6px !important;
-                            background: #000000 !important;
-                            overflow: visible !important;
-                        }
+                            if df_up_valid.empty:
+                                st.warning("⚠️ Tidak ada data bobot baru yang valid untuk diproses. Pastikan kolom 'Bobot Baru (kg)' telah diisi angka.")
+                            else:
+                                st.markdown("##### 🔍 Pratinjau Data Yang Akan Diperbarui:")
+                                st.dataframe(df_up_valid[["Kode Sapi", "RFID/Tag", "Bobot Terakhir (kg)", "Bobot Baru (kg)"]], use_container_width=True, hide_index=True)
 
-                        div[data-testid="stCameraInput"] * {
-                            overflow: visible !important;
-                        }
+                                if st.button("🚀 Simpan Timbangan Massal dari Excel", type="primary", use_container_width=True):
+                                    with st.spinner("⏳ Memproses perhitungan ADG & memperbarui database cloud..."):
+                                        total_sukses = 0
+                                        new_logs_list = []
 
-                        div[data-testid="stCameraInput"] button[aria-label*="Switch"],
-                        div[data-testid="stCameraInput"] button[aria-label*="camera"],
-                        div[data-testid="stCameraInput"] button[aria-label*="Kamera"],
-                        div[data-testid="stCameraInput"] button[title*="Switch"],
-                        div[data-testid="stCameraInput"] button[title*="camera"] {
-                            position: absolute !important;
-                            top: 12px !important;
-                            right: 12px !important;
-                            z-index: 999999 !important;
-                            background-color: rgba(15, 23, 42, 0.9) !important;
-                            color: #00FF66 !important;
-                            border: 2px solid #00FF66 !important;
-                            border-radius: 50% !important;
-                            width: 50px !important;
-                            height: 50px !important;
-                            display: flex !important;
-                            align-items: center !important;
-                            justify-content: center !important;
-                            box-shadow: 0px 4px 12px rgba(0,255,102,0.6) !important;
-                            cursor: pointer !important;
-                        }
+                                        for _, r_up in df_up_valid.iterrows():
+                                            k_sapi = str(r_up["Kode Sapi"]).strip()
+                                            r_tag = str(r_up["RFID/Tag"]).strip()
+                                            b_baru = float(r_up["Bobot Baru (kg)"])
 
-                        div[data-testid="stCameraInput"] button svg {
-                            fill: #00FF66 !important;
-                            width: 26px !important;
-                            height: 26px !important;
-                        }
-                        </style>
+                                            mask_s = (df_sapi["Kode Sapi"] == k_sapi) & (df_sapi["RFID/Tag"] == r_tag)
+                                            if "Status" in df_sapi.columns:
+                                                mask_s = mask_s & (df_sapi["Status"] == "AKTIF")
 
-                        <script>
-                        let switchedToRear = false;
+                                            if not df_sapi[mask_s].empty:
+                                                row_db = df_sapi[mask_s].iloc[0]
+                                                tgl_masuk_s = row_db["Tgl Masuk"]
+                                                b_awal_s = row_db["Bobot Awal (kg)"]
+                                                
+                                                adg_val = float(calculate_adg(tgl_masuk_s, b_awal_s, tgl_timbang_str, b_baru))
 
-                        function enforceRearCamera() {
-                            if (switchedToRear) return;
+                                                df_sapi.loc[mask_s, "Tgl Cek Akhir"] = tgl_timbang_str
+                                                df_sapi.loc[mask_s, "Bobot Akhir (kg)"] = b_baru
+                                                df_sapi.loc[mask_s, "ADG (kg/hari)"] = adg_val
 
-                            const cameraDiv = document.querySelector('div[data-testid="stCameraInput"]');
-                            if (!cameraDiv) return;
+                                                new_logs_list.append({
+                                                    "Tanggal Timbang": tgl_timbang_str,
+                                                    "Kode Sapi": k_sapi,
+                                                    "RFID/Tag": r_tag,
+                                                    "Lokasi Pen": row_db['Lokasi Pen'],
+                                                    "Bobot (kg)": b_baru,
+                                                    "ADG (kg/hari)": adg_val,
+                                                    "Operator": f"{user_name} (Batch Excel)"
+                                                })
+                                                total_sukses += 1
 
-                            const videoEl = cameraDiv.querySelector('video');
-                            const buttons = Array.from(cameraDiv.querySelectorAll('button'));
-                            
-                            const switchBtn = buttons.find(b => {
-                                const lbl = (b.getAttribute('aria-label') || b.getAttribute('title') || '').toLowerCase();
-                                return lbl.includes('switch') || lbl.includes('camera') || lbl.includes('kamera') || b.querySelector('svg');
-                            });
+                                        if total_sukses > 0:
+                                            save_data(df_sapi)
 
-                            if (videoEl && videoEl.srcObject) {
-                                const tracks = videoEl.srcObject.getVideoTracks();
-                                if (tracks.length > 0) {
-                                    const settings = tracks[0].getSettings();
-                                    const label = (tracks[0].label || '').toLowerCase();
-                                    const facing = settings.facingMode || '';
+                                            if new_logs_list:
+                                                df_new_logs = pd.DataFrame(new_logs_list)
+                                                df_riwayat_timbang = pd.concat([df_riwayat_timbang, df_new_logs], ignore_index=True)
+                                                write_df_to_sheet("riwayat_timbangan", df_riwayat_timbang, COLS_RIWAYAT_TIMBANG)
 
-                                    if (facing === 'user' || label.includes('front') || label.includes('selfie') || label.includes('depan')) {
-                                        if (switchBtn) {
-                                            switchBtn.click();
+                                            add_activity_log(user_name, "Timbangan Massal Excel", f"Berhasil memperbarui {total_sukses} sapi di {lokasi_pencarian} via Import Excel")
+                                            st.success(f"🎉 **SUKSES!** Sebanyak **{total_sukses} ekor sapi** di **{lokasi_pencarian}** berhasil diperbarui bobot & ADG-nya!")
+                                            st.balloons()
+                                            st.rerun()
+
+                    except Exception as e_ex:
+                        st.error(f"❌ Terjadi kesalahan saat membaca file Excel: {e_ex}")
+
+            # ==================== METODE 1 & 2: INPUT INDIVIDUAL (MANUAL / FOTO) ====================
+            else:
+                if df_sapi_belum_timbang.empty:
+                    st.success(f"🎉 **SELESAI!** Seluruh **{total_sapi_pen} ekor sapi aktif** di **{lokasi_pencarian}** telah selesai ditimbang pada tanggal **{tgl_timbang_str}**.")
+                    
+                    with st.expander("🔍 Lihat Daftar Sapi yang Sudah Ditimbang Hari Ini di Pen Ini"):
+                        df_sudah_show = df_sapi_terfilter.sort_values(by="Kode Sapi", ascending=True)
+                        st.dataframe(df_sudah_show[["Kode Sapi", "RFID/Tag", "Jenis Sapi", "Bobot Akhir (kg)", "ADG (kg/hari)", "Tgl Cek Akhir"]], use_container_width=True, hide_index=True)
+                else:
+                    st.caption(f"📊 Progress Penimbangan Pen **{lokasi_pencarian}**: Terproses **{sapi_terhitung} dari {total_sapi_pen} ekor** ({len(df_sapi_belum_timbang)} ekor tersisa di daftar).")
+                    
+                    opsi_sapi = df_sapi_belum_timbang.apply(lambda r: f"{r['Kode Sapi']} - RFID: {r['RFID/Tag']}", axis=1).tolist()
+                    sapi_pilihan = st.selectbox("Pilih Kode Sapi Yang Ditimbang:", opsi_sapi)
+                    
+                    kode_sapi_asli = sapi_pilihan.split(" - RFID: ")[0]
+                    rfid_sapi_asli = sapi_pilihan.split(" - RFID: ")[1]
+                    
+                    matched_rows = df_sapi_belum_timbang[(df_sapi_belum_timbang["Kode Sapi"] == kode_sapi_asli) & (df_sapi_belum_timbang["RFID/Tag"] == rfid_sapi_asli)]
+                    if matched_rows.empty:
+                        st.error("⚠️ Data sapi aktif tidak ditemukan di database master.")
+                    else:
+                        row_sapi = matched_rows.iloc[0]
+
+                        is_penimbangan_pertama = (str(row_sapi['Tgl Cek Akhir']) == str(row_sapi['Tgl Masuk']))
+                        status_timbang_text = "🟢 PENIMBANGAN PERTAMA (Evaluasi Awal Masa Karantina)" if is_penimbangan_pertama else "🔵 PENIMBANGAN BERKALA / RUTIN"
+
+                        st.info(f"📋 **Data Historis Sapi:** ({status_timbang_text})\n* Tanggal Masuk Area: {row_sapi['Tgl Masuk']} | Berat Awal: {row_sapi['Bobot Awal (kg)']} kg\n* RFID Asal: {row_sapi.get('RFID/Tag Asal', '-')} | RFID Baru: {row_sapi['RFID/Tag']}\n* Timbangan Terakhir: {row_sapi['Tgl Cek Akhir']} | Berat Akhir: {row_sapi['Bobot Akhir (kg)']} kg")
+
+                        bobot_default_val = float(row_sapi["Bobot Akhir (kg)"])
+
+                        # --- JIKA METODE PEMINDAIAN FOTO DIPILIH ---
+                        if metode_penimbangan == "📸 Pemindaian Foto / LiDAR (Visual AI)":
+                            st.markdown("##### 📸 Modul Pemindaian Visual AI & Depth LiDAR")
+                            st.caption("📱 **Penting:** Pegang HP dalam posisi **Horizontal (Landscape)**. Kamera Utama / Belakang akan otomatis diaktifkan.")
+
+                            st.markdown("""
+                            <style>
+                            div[data-testid="stCameraInput"] {
+                                position: relative !important;
+                                border: 2px dashed #00FF66 !important;
+                                border-radius: 12px !important;
+                                padding: 6px !important;
+                                background: #000000 !important;
+                                overflow: visible !important;
+                            }
+
+                            div[data-testid="stCameraInput"] * {
+                                overflow: visible !important;
+                            }
+
+                            div[data-testid="stCameraInput"] button[aria-label*="Switch"],
+                            div[data-testid="stCameraInput"] button[aria-label*="camera"],
+                            div[data-testid="stCameraInput"] button[aria-label*="Kamera"],
+                            div[data-testid="stCameraInput"] button[title*="Switch"],
+                            div[data-testid="stCameraInput"] button[title*="camera"] {
+                                position: absolute !important;
+                                top: 12px !important;
+                                right: 12px !important;
+                                z-index: 999999 !important;
+                                background-color: rgba(15, 23, 42, 0.9) !important;
+                                color: #00FF66 !important;
+                                border: 2px solid #00FF66 !important;
+                                border-radius: 50% !important;
+                                width: 50px !important;
+                                height: 50px !important;
+                                display: flex !important;
+                                align-items: center !important;
+                                justify-content: center !important;
+                                box-shadow: 0px 4px 12px rgba(0,255,102,0.6) !important;
+                                cursor: pointer !important;
+                            }
+
+                            div[data-testid="stCameraInput"] button svg {
+                                fill: #00FF66 !important;
+                                width: 26px !important;
+                                height: 26px !important;
+                            }
+                            </style>
+
+                            <script>
+                            let switchedToRear = false;
+
+                            function enforceRearCamera() {
+                                if (switchedToRear) return;
+
+                                const cameraDiv = document.querySelector('div[data-testid="stCameraInput"]');
+                                if (!cameraDiv) return;
+
+                                const videoEl = cameraDiv.querySelector('video');
+                                const buttons = Array.from(cameraDiv.querySelectorAll('button'));
+                                
+                                const switchBtn = buttons.find(b => {
+                                    const lbl = (b.getAttribute('aria-label') || b.getAttribute('title') || '').toLowerCase();
+                                    return lbl.includes('switch') || lbl.includes('camera') || lbl.includes('kamera') || b.querySelector('svg');
+                                });
+
+                                if (videoEl && videoEl.srcObject) {
+                                    const tracks = videoEl.srcObject.getVideoTracks();
+                                    if (tracks.length > 0) {
+                                        const settings = tracks[0].getSettings();
+                                        const label = (tracks[0].label || '').toLowerCase();
+                                        const facing = settings.facingMode || '';
+
+                                        if (facing === 'user' || label.includes('front') || label.includes('selfie') || label.includes('depan')) {
+                                            if (switchBtn) {
+                                                switchBtn.click();
+                                                switchedToRear = true;
+                                            }
+                                        } else if (facing === 'environment' || label.includes('back') || label.includes('rear') || label.includes('belakang')) {
                                             switchedToRear = true;
                                         }
-                                    } else if (facing === 'environment' || label.includes('back') || label.includes('rear') || label.includes('belakang')) {
-                                        switchedToRear = true;
                                     }
                                 }
                             }
-                        }
 
-                        const rearCheckInterval = setInterval(() => {
-                            enforceRearCamera();
-                            if (switchedToRear) clearInterval(rearCheckInterval);
-                        }, 600);
-                        </script>
-                        """, unsafe_allow_html=True)
+                            const rearCheckInterval = setInterval(() => {
+                                enforceRearCamera();
+                                if (switchedToRear) clearInterval(rearCheckInterval);
+                            }, 600);
+                            </script>
+                            """, unsafe_allow_html=True)
 
-                        c_lidar1, c_lidar2 = st.columns([1.2, 2])
-                        with c_lidar1:
-                            jarak_kamera = st.slider(
-                                "📏 Jarak Posisikan Kamera ke Sapi (Meter)",
-                                min_value=1.5, max_value=4.5, value=2.5, step=0.1,
-                                help="Sesuaikan dengan perkiraan jarak berdiri operator ke badan sapi di pen."
+                            c_lidar1, c_lidar2 = st.columns([1.2, 2])
+                            with c_lidar1:
+                                jarak_kamera = st.slider(
+                                    "📏 Jarak Posisikan Kamera ke Sapi (Meter)",
+                                    min_value=1.5, max_value=4.5, value=2.5, step=0.1,
+                                    help="Sesuaikan dengan perkiraan jarak berdiri operator ke badan sapi di pen."
+                                )
+                                st.info("💡 **Tips:** Untuk iPhone Pro / Android ToF, sensor LiDAR secara otomatis membantu stabilitas pembacaan jarak.")
+
+                            with c_lidar2:
+                                foto_sapi = st.camera_input("📸 Bidik Sapi dari Samping", key=f"cam_{kode_sapi_asli}")
+
+                            if foto_sapi is not None:
+                                with st.spinner("⏳ Memproses citra visual, mengukur piksel kontur & menghitung bobot..."):
+                                    est_bobot, p_badan, l_dada, img_hasil = estimasi_bobot_dari_foto(foto_sapi, jarak_kamera)
+                                    
+                                    if est_bobot > 0:
+                                        st.session_state[f"est_weight_{kode_sapi_asli}"] = est_bobot
+                                        
+                                        st.success(f"✨ **PANDUAN HASIL PEMINDAIAN AI:**\n* Estimasi Panjang Badan: **{p_badan} cm**\n* Estimasi Lingkar Dada: **{l_dada} cm**\n* 🎯 **Estimasi Bobot Hasil Foto: {est_bobot} kg**")
+                                        
+                                        if img_hasil is not None:
+                                            st.image(img_hasil, caption="🔍 Hasil Deteksi AI: Kotak Hijau (Batas Sapi) | Garis Kuning (Panjang Badan) | Garis Sian (Lingkar Dada)", use_container_width=True)
+                                        
+                                        bobot_default_val = est_bobot
+
+                        # Mengambil nilai hasil foto jika ada di session state
+                        if f"est_weight_{kode_sapi_asli}" in st.session_state and metode_penimbangan == "📸 Pemindaian Foto / LiDAR (Visual AI)":
+                            bobot_default_val = st.session_state[f"est_weight_{kode_sapi_asli}"]
+
+                        # --- FORM SIMPAN TIMBANGAN MANUAL ---
+                        with st.form("form_timbangan_berkala", clear_on_submit=False):
+                            bobot_timbang_baru = st.number_input(
+                                f"Hasil Berat Timbangan Baru (kg) untuk Sapi: {kode_sapi_asli}",
+                                min_value=30.0, max_value=1500.0,
+                                value=float(bobot_default_val), step=0.5,
+                                help="Dapat disesuaikan kembali secara manual sebelum disimpan."
                             )
-                            st.info("💡 **Tips:** Untuk iPhone Pro / Android ToF, sensor LiDAR secara otomatis membantu stabilitas pembacaan jarak.")
 
-                        with c_lidar2:
-                            foto_sapi = st.camera_input("📸 Bidik Sapi dari Samping", key=f"cam_{kode_sapi_asli}")
+                            submit_timbang = st.form_submit_button("💾 Simpan & Kalkulasi ADG Baru", type="primary", use_container_width=True)
 
-                        if foto_sapi is not None:
-                            with st.spinner("⏳ Memproses citra visual, mengukur piksel kontur & menghitung bobot..."):
-                                est_bobot, p_badan, l_dada, img_hasil = estimasi_bobot_dari_foto(foto_sapi, jarak_kamera)
-                                
-                                if est_bobot > 0:
-                                    st.session_state[f"est_weight_{kode_sapi_asli}"] = est_bobot
+                            if submit_timbang:
+                                with st.spinner("⏳ Memproses perhitungan ADG dan mengamankan data..."):
+                                    adg_terbaru = float(calculate_adg(row_sapi["Tgl Masuk"], row_sapi["Bobot Awal (kg)"], tgl_timbang_str, bobot_timbang_baru))
                                     
-                                    st.success(f"✨ **PANDUAN HASIL PEMINDAIAN AI:**\n* Estimasi Panjang Badan: **{p_badan} cm**\n* Estimasi Lingkar Dada: **{l_dada} cm**\n* 🎯 **Estimasi Bobot Hasil Foto: {est_bobot} kg**")
+                                    # Update database master sapi (Khusus Sapi Aktif)
+                                    mask = (df_sapi["Kode Sapi"] == kode_sapi_asli) & (df_sapi["RFID/Tag"] == rfid_sapi_asli)
+                                    if "Status" in df_sapi.columns:
+                                        mask = mask & (df_sapi["Status"] == "AKTIF")
+
+                                    df_sapi.loc[mask, "Tgl Cek Akhir"] = tgl_timbang_str
+                                    df_sapi.loc[mask, "Bobot Akhir (kg)"] = float(bobot_timbang_baru)
+                                    df_sapi.loc[mask, "ADG (kg/hari)"] = adg_terbaru
+                                    save_data(df_sapi)
+
+                                    ket_metode = "Foto Visual AI/LiDAR" if "Foto" in metode_penimbangan else "Timbangan Fisik"
+
+                                    new_log = {
+                                        "Tanggal Timbang": tgl_timbang_str,
+                                        "Kode Sapi": kode_sapi_asli,
+                                        "RFID/Tag": rfid_sapi_asli,
+                                        "Lokasi Pen": row_sapi['Lokasi Pen'],
+                                        "Bobot (kg)": float(bobot_timbang_baru),
+                                        "ADG (kg/hari)": adg_terbaru,
+                                        "Operator": f"{user_name} ({ket_metode})"
+                                    }
+                                    df_riwayat_timbang = pd.concat([df_riwayat_timbang, pd.DataFrame([new_log])], ignore_index=True)
+                                    write_df_to_sheet("riwayat_timbangan", df_riwayat_timbang, COLS_RIWAYAT_TIMBANG)
                                     
-                                    if img_hasil is not None:
-                                        st.image(img_hasil, caption="🔍 Hasil Deteksi AI: Kotak Hijau (Batas Sapi) | Garis Kuning (Panjang Badan) | Garis Sian (Lingkar Dada)", use_container_width=True)
+                                    add_activity_log(user_name, "Timbangan Rutin", f"Menimbang Sapi {kode_sapi_asli} via {ket_metode} di {row_sapi['Lokasi Pen']} bobot {bobot_timbang_baru}kg")
                                     
-                                    bobot_default_val = est_bobot
+                                    if f"est_weight_{kode_sapi_asli}" in st.session_state:
+                                        del st.session_state[f"est_weight_{kode_sapi_asli}"]
 
-                    # Mengambil nilai hasil foto jika ada di session state
-                    if f"est_weight_{kode_sapi_asli}" in st.session_state and metode_penimbangan == "📸 Pemindaian Foto / LiDAR (Visual AI)":
-                        bobot_default_val = st.session_state[f"est_weight_{kode_sapi_asli}"]
-
-                    # --- FORM SIMPAN TIMBANGAN ---
-                    with st.form("form_timbangan_berkala", clear_on_submit=False):
-                        bobot_timbang_baru = st.number_input(
-                            f"Hasil Berat Timbangan Baru (kg) untuk Sapi: {kode_sapi_asli}",
-                            min_value=30.0, max_value=1500.0,
-                            value=float(bobot_default_val), step=0.5,
-                            help="Dapat disesuaikan kembali secara manual sebelum disimpan."
-                        )
-
-                        submit_timbang = st.form_submit_button("💾 Simpan & Kalkulasi ADG Baru", type="primary", use_container_width=True)
-
-                        if submit_timbang:
-                            with st.spinner("⏳ Memproses perhitungan ADG dan mengamankan data..."):
-                                adg_terbaru = float(calculate_adg(row_sapi["Tgl Masuk"], row_sapi["Bobot Awal (kg)"], tgl_timbang_str, bobot_timbang_baru))
-                                
-                                # Update database master sapi (Khusus Sapi Aktif)
-                                mask = (df_sapi["Kode Sapi"] == kode_sapi_asli) & (df_sapi["RFID/Tag"] == rfid_sapi_asli)
-                                if "Status" in df_sapi.columns:
-                                    mask = mask & (df_sapi["Status"] == "AKTIF")
-
-                                df_sapi.loc[mask, "Tgl Cek Akhir"] = tgl_timbang_str
-                                df_sapi.loc[mask, "Bobot Akhir (kg)"] = float(bobot_timbang_baru)
-                                df_sapi.loc[mask, "ADG (kg/hari)"] = adg_terbaru
-                                save_data(df_sapi)
-
-                                ket_metode = "Foto Visual AI/LiDAR" if "Foto" in metode_penimbangan else "Timbangan Fisik"
-
-                                new_log = {
-                                    "Tanggal Timbang": tgl_timbang_str,
-                                    "Kode Sapi": kode_sapi_asli,
-                                    "RFID/Tag": rfid_sapi_asli,
-                                    "Lokasi Pen": row_sapi['Lokasi Pen'],
-                                    "Bobot (kg)": float(bobot_timbang_baru),
-                                    "ADG (kg/hari)": adg_terbaru,
-                                    "Operator": f"{user_name} ({ket_metode})"
-                                }
-                                df_riwayat_timbang = pd.concat([df_riwayat_timbang, pd.DataFrame([new_log])], ignore_index=True)
-                                write_df_to_sheet("riwayat_timbangan", df_riwayat_timbang, COLS_RIWAYAT_TIMBANG)
-                                
-                                add_activity_log(user_name, "Timbangan Rutin", f"Menimbang Sapi {kode_sapi_asli} via {ket_metode} di {row_sapi['Lokasi Pen']} bobot {bobot_timbang_baru}kg")
-                                
-                                if f"est_weight_{kode_sapi_asli}" in st.session_state:
-                                    del st.session_state[f"est_weight_{kode_sapi_asli}"]
-
-                            if adg_terbaru < TARGET_ADG:
-                                st.error(f"⚠️ **ALARM PERFORMA RENDAH:** Sapi {kode_sapi_asli} berhasil disimpan. ADG hasil timbangan ini hanya mencapai `{adg_terbaru:.2f} kg/hari` (Target: {TARGET_ADG}).")
-                            else:
-                                st.success(f"🎉 Sukses! Bobot Sapi {kode_sapi_asli} diperbarui ke {bobot_timbang_baru} kg dengan ADG Bagus: `{adg_terbaru:.2f} kg/hari`.")
-                                st.balloons()
-                            st.rerun()
+                                if adg_terbaru < TARGET_ADG:
+                                    st.error(f"⚠️ **ALARM PERFORMA RENDAH:** Sapi {kode_sapi_asli} berhasil disimpan. ADG hasil timbangan ini hanya mencapai `{adg_terbaru:.2f} kg/hari` (Target: {TARGET_ADG}).")
+                                else:
+                                    st.success(f"🎉 Sukses! Bobot Sapi {kode_sapi_asli} diperbarui ke {bobot_timbang_baru} kg dengan ADG Bagus: `{adg_terbaru:.2f} kg/hari`.")
+                                    st.balloons()
+                                st.rerun()
 
     # ==================== TAB 2: EDIT / HAPUS RIWAYAT ====================
     with tab_edit:
