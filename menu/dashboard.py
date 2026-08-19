@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from datetime import datetime
 
 def tampilkan_dashboard(df_sapi, read_sheet_to_df):
     st.subheader("📊 Dashboard Utama & Pemantauan Populasi Berkala")
@@ -153,20 +154,40 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
             if cols_umur:
                 df_monitor = df_monitor.drop(columns=cols_umur)
 
+            # Kalkulasi Otomatis Lama Penggemukan (Hari) dari Tgl Masuk
+            today = datetime.now().date()
+            def hitung_lama_penggemukan(tgl_m):
+                try:
+                    if pd.isna(tgl_m) or str(tgl_m).strip() in ["", "-", "None", "NaN"]:
+                        return 0
+                    d_in = datetime.strptime(str(tgl_m)[:10], "%Y-%m-%d").date()
+                    return max(0, (today - d_in).days)
+                except Exception:
+                    return 0
+
+            df_monitor["Lama Penggemukan (Hari)"] = df_monitor["Tgl Masuk"].apply(hitung_lama_penggemukan)
+
             df_monitor = df_monitor.sort_values(by="Kode Sapi", ascending=True).reset_index(drop=True)
             df_monitor = df_monitor.rename(columns={"Kode Sapi": "Kode Tiba", "RFID/Tag": "RFID/Tag Kandang"})
             if "RFID/Tag Asal" not in df_monitor.columns: df_monitor["RFID/Tag Asal"] = "-"
             
+            # Susun Urutan Kolom
             cols_order = list(df_monitor.columns)
             if "Kode Tiba" in cols_order and "RFID/Tag Asal" in cols_order:
                 cols_order.remove("RFID/Tag Asal")
                 cols_order.insert(cols_order.index("Kode Tiba") + 1, "RFID/Tag Asal")
-                df_monitor = df_monitor[cols_order]
+            
+            if "Tgl Masuk" in cols_order and "Lama Penggemukan (Hari)" in cols_order:
+                cols_order.remove("Lama Penggemukan (Hari)")
+                cols_order.insert(cols_order.index("Tgl Masuk") + 1, "Lama Penggemukan (Hari)")
+
+            df_monitor = df_monitor[cols_order]
 
             st.dataframe(
                 df_monitor.style.apply(style_monitor_kandang, axis=1), 
                 use_container_width=True, hide_index=True,
                 column_config={
+                    "Lama Penggemukan (Hari)": st.column_config.NumberColumn("Lama Penggemukan (Hari)", format="%d Hari"),
                     "Bobot Awal (kg)": st.column_config.NumberColumn("Bobot Awal (kg)", format="%.2f"),
                     "Bobot Akhir (kg)": st.column_config.NumberColumn("Bobot Akhir (kg)", format="%.2f"),
                     "ADG (kg/hari)": st.column_config.NumberColumn("ADG (kg/hari)", format="%.2f"),
@@ -180,7 +201,6 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
     st.markdown("---")
     st.markdown("### 🔍 Pencarian Riwayat & Profil Lengkap Sapi (Aktif & Arsip)")
     
-    # Menampilkan seluruh sapi (Aktif, Panen, Afkir) dengan label status agar tetap bisa dilacak
     df_sapi_sorted = df_sapi.sort_values(by="Kode Sapi", ascending=True)
     opsi_cari_sapi = df_sapi_sorted.apply(
         lambda r: f"{r['Kode Sapi']} - RFID: {r['RFID/Tag']} [{r.get('Status', 'AKTIF')}]", axis=1
