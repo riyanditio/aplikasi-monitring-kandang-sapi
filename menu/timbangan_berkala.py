@@ -181,11 +181,27 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
                     st.markdown("**Langkah 1: Unduh Template Excel Pre-filled**")
                     
                     df_template = df_sapi_terfilter.sort_values(by="Kode Sapi", ascending=True).copy()
+
+                    # Hitung Lama Penggemukan (Hari) secara presisi per sapi relatif terhadap tanggal timbang yang dipilih
+                    def hitung_lama_penggemukan(tgl_m):
+                        try:
+                            if pd.isna(tgl_m) or str(tgl_m).strip() in ["", "-", "None", "NaN"]:
+                                return 0
+                            d_in = datetime.strptime(str(tgl_m)[:10], "%Y-%m-%d").date()
+                            return max(0, (tgl_timbang_sekarang - d_in).days)
+                        except Exception:
+                            return 0
+
+                    df_template["Lama Penggemukan (Hari)"] = df_template["Tgl Masuk"].apply(hitung_lama_penggemukan)
+
                     df_template_export = pd.DataFrame({
                         "Kode Sapi": df_template["Kode Sapi"],
                         "RFID/Tag": df_template["RFID/Tag"],
                         "Jenis Sapi": df_template["Jenis Sapi"],
                         "Lokasi Pen": df_template["Lokasi Pen"],
+                        "Tgl Masuk": df_template["Tgl Masuk"],
+                        "Bobot Awal (kg)": df_template["Bobot Awal (kg)"],
+                        "Lama Penggemukan (Hari)": df_template["Lama Penggemukan (Hari)"],
                         "Bobot Terakhir (kg)": df_template["Bobot Akhir (kg)"],
                         "Tanggal Timbang (YYYY-MM-DD)": tgl_timbang_str,
                         "Bobot Baru (kg)": ""
@@ -229,7 +245,8 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
                                 st.warning("⚠️ Tidak ada data bobot baru yang valid untuk diproses. Pastikan kolom 'Bobot Baru (kg)' telah diisi angka.")
                             else:
                                 st.markdown("##### 🔍 Pratinjau Data Yang Akan Diperbarui:")
-                                st.dataframe(df_up_valid[["Kode Sapi", "RFID/Tag", "Bobot Terakhir (kg)", "Bobot Baru (kg)"]], use_container_width=True, hide_index=True)
+                                cols_preview = [c for c in ["Kode Sapi", "RFID/Tag", "Bobot Awal (kg)", "Lama Penggemukan (Hari)", "Bobot Terakhir (kg)", "Bobot Baru (kg)"] if c in df_up_valid.columns]
+                                st.dataframe(df_up_valid[cols_preview], use_container_width=True, hide_index=True)
 
                                 if st.button("🚀 Simpan Timbangan Massal dari Excel", type="primary", use_container_width=True):
                                     with st.spinner("⏳ Memproses perhitungan ADG & memperbarui database cloud..."):
