@@ -209,22 +209,44 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
     sapi_dicari = st.selectbox("Pilih / Ketik Nomor Sapi untuk melihat detail perjalanan:", ["-- Silakan Pilih Sapi --"] + opsi_cari_sapi)
 
     if sapi_dicari != "-- Silakan Pilih Sapi --":
-        kode_cari = sapi_dicari.split(" - RFID: ")[0]
-        rfid_cari = sapi_dicari.split(" - RFID: ")[1].split(" [")[0]
+        kode_cari = sapi_dicari.split(" - RFID: ")[0].strip()
         
-        info_sapi = df_sapi[(df_sapi["Kode Sapi"] == kode_cari) & (df_sapi["RFID/Tag"] == rfid_cari)].iloc[0]
+        info_sapi = df_sapi[df_sapi["Kode Sapi"].astype(str).str.strip() == kode_cari].iloc[0]
         st_status = info_sapi.get('Status', 'AKTIF')
         
         st.info(f"**Profil Sapi:** Status: **{st_status}** | Jenis: {info_sapi['Jenis Sapi']} | Kelamin: {info_sapi['Jenis Kelamin']} | Masuk: {info_sapi['Tgl Masuk']} | Posisi Terakhir: **{info_sapi['Lokasi Pen']}**")
         
         cl_hist1, cl_hist2 = st.columns(2)
         
+        # --- RIWAYAT PENIMBANGAN (Pencarian Fleksibel berdasarkan Kode Sapi) ---
         with cl_hist1:
             st.markdown("📊 **Riwayat Penimbangan**")
-            df_r_timbang = read_sheet_to_df("riwayat_timbangan", ["Tanggal Timbang", "Kode Sapi", "RFID/Tag", "Lokasi Pen", "Bobot (kg)", "ADG (kg/hari)", "Operator"])
-            df_r_timbang = df_r_timbang[(df_r_timbang["Kode Sapi"] == kode_cari) & (df_r_timbang["RFID/Tag"] == rfid_cari)]
+            COLS_R_TIMBANG = ["Tanggal Timbang", "Kode Sapi", "RFID/Tag", "Lokasi Pen", "Bobot (kg)", "ADG (kg/hari)", "Operator"]
+            df_r_timbang = read_sheet_to_df("riwayat_timbangan", COLS_R_TIMBANG)
+            
             if not df_r_timbang.empty:
-                st.dataframe(df_r_timbang[["Tanggal Timbang", "Bobot (kg)", "ADG (kg/hari)"]].sort_values("Tanggal Timbang", ascending=False), use_container_width=True, hide_index=True, column_config={"Bobot (kg)": st.column_config.NumberColumn(format="%.2f"), "ADG (kg/hari)": st.column_config.NumberColumn(format="%.2f")})
+                rename_map_timbang = {"Rfid Tag": "RFID/Tag", "Adg Kg Hari": "ADG (kg/hari)", "Bobot Kg": "Bobot (kg)"}
+                df_r_timbang = df_r_timbang.rename(columns=rename_map_timbang)
+                
+                df_r_timbang_sapi = df_r_timbang[
+                    df_r_timbang["Kode Sapi"].astype(str).str.strip() == kode_cari
+                ].copy()
+                
+                if not df_r_timbang_sapi.empty:
+                    df_r_timbang_sapi["Bobot (kg)"] = pd.to_numeric(df_r_timbang_sapi["Bobot (kg)"], errors='coerce')
+                    df_r_timbang_sapi["ADG (kg/hari)"] = pd.to_numeric(df_r_timbang_sapi["ADG (kg/hari)"], errors='coerce')
+                    
+                    st.dataframe(
+                        df_r_timbang_sapi[["Tanggal Timbang", "Bobot (kg)", "ADG (kg/hari)"]].sort_values("Tanggal Timbang", ascending=False), 
+                        use_container_width=True, 
+                        hide_index=True, 
+                        column_config={
+                            "Bobot (kg)": st.column_config.NumberColumn(format="%.2f"), 
+                            "ADG (kg/hari)": st.column_config.NumberColumn(format="%.2f")
+                        }
+                    )
+                else:
+                    st.write("*Belum ada riwayat timbangan berkala.*")
             else:
                 st.write("*Belum ada riwayat timbangan berkala.*")
 
@@ -234,9 +256,9 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
             
             df_r_pakan = read_sheet_to_df("pakan_harian", ["Tanggal", "Lokasi Pen", "Metode", "Target Spesifik", "Jenis Pakan", "Jumlah Pakan (kg)", "Operator"])
             
-            target_id = f"{kode_cari} - {rfid_cari}"
+            target_id = f"{kode_cari} - {info_sapi['RFID/Tag']}"
             
-            df_kombinasi_pakan = df_r_pakan[df_r_pakan["Target Spesifik"] == target_id].copy()
+            df_kombinasi_pakan = df_r_pakan[df_r_pakan["Target Spesifik"].astype(str).str.contains(kode_cari, na=False)].copy()
             
             df_legacy_serentak = df_r_pakan[(df_r_pakan["Metode"] == "Serentak") & (df_r_pakan["Lokasi Pen"] == info_sapi["Lokasi Pen"]) & (~df_r_pakan["Target Spesifik"].str.contains(" - ", na=False))].copy()
             
@@ -275,8 +297,7 @@ def tampilkan_dashboard(df_sapi, read_sheet_to_df):
         
         if not df_medis_all.empty:
             df_medis_sapi = df_medis_all[
-                (df_medis_all["Kode Sapi"].astype(str) == str(kode_cari)) | 
-                (df_medis_all["RFID/Tag"].astype(str) == str(rfid_cari))
+                df_medis_all["Kode Sapi"].astype(str).str.strip() == kode_cari
             ].copy()
         else:
             df_medis_sapi = pd.DataFrame()
