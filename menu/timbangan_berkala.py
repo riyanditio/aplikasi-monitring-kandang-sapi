@@ -99,12 +99,19 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
 
     tab_input, tab_edit, tab_analisis = st.tabs(["➕ Input Timbangan Baru", "⚙️ Edit / Hapus Riwayat", "📈 Analisis Timbang per Sapi"])
 
+    # Helper Ambil & Normalisasi Data Riwayat Timbangan
+    def get_riwayat_clean():
+        df_r = read_sheet_to_df("riwayat_timbangan", COLS_RIWAYAT_TIMBANG)
+        if not df_r.empty:
+            rename_map = {"Rfid Tag": "RFID/Tag", "Adg Kg Hari": "ADG (kg/hari)", "Bobot Kg": "Bobot (kg)"}
+            df_r = df_r.rename(columns=rename_map)
+        return df_r
+
     # ==================== TAB 1: INPUT TIMBANGAN BARU ====================
     with tab_input:
         st.markdown("Gunakan filter Blok & Pen untuk mempercepat pencarian sapi aktif yang akan ditimbang.")
 
-        # Ambil riwayat timbangan untuk memfilter sapi yang sudah ditimbang hari ini
-        df_riwayat_timbang = read_sheet_to_df("riwayat_timbangan", COLS_RIWAYAT_TIMBANG)
+        df_riwayat_timbang = get_riwayat_clean()
 
         list_lokasi_eksis = df_sapi_aktif["Lokasi Pen"].unique()
         grid_filter = {}
@@ -142,15 +149,14 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
                 df_riwayat_today = df_riwayat_timbang[df_riwayat_timbang["Tanggal Timbang"].astype(str) == tgl_timbang_str]
                 if not df_riwayat_today.empty:
                     set_sapi_sudah_timbang = set(
-                        df_riwayat_today.apply(lambda r: f"{r['Kode Sapi']}_{r['RFID/Tag']}", axis=1)
+                        df_riwayat_today["Kode Sapi"].astype(str).str.strip().tolist()
                     )
 
             # Filter sapi yang BELUM ditimbang pada tanggal terpilih
             df_sapi_belum_timbang = df_sapi_terfilter[
-                ~df_sapi_terfilter.apply(lambda r: f"{r['Kode Sapi']}_{r['RFID/Tag']}" in set_sapi_sudah_timbang, axis=1)
+                ~df_sapi_terfilter["Kode Sapi"].astype(str).str.strip().isin(set_sapi_sudah_timbang)
             ].copy()
 
-            # --- URUTKAN BERDASARKAN KODE SAPI (KODE TIBA) A-Z ---
             df_sapi_belum_timbang = df_sapi_belum_timbang.sort_values(by="Kode Sapi", ascending=True).reset_index(drop=True)
 
             total_sapi_pen = len(df_sapi_terfilter)
@@ -182,7 +188,6 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
                     
                     df_template = df_sapi_terfilter.sort_values(by="Kode Sapi", ascending=True).copy()
 
-                    # Hitung Lama Penggemukan (Hari) secara presisi per sapi relatif terhadap tanggal timbang yang dipilih
                     def hitung_lama_penggemukan(tgl_m):
                         try:
                             if pd.isna(tgl_m) or str(tgl_m).strip() in ["", "-", "None", "NaN"]:
@@ -232,7 +237,7 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
                 if file_excel is not None:
                     try:
                         df_up = pd.read_excel(file_excel)
-                        req_cols = ["Kode Sapi", "RFID/Tag", "Bobot Baru (kg)"]
+                        req_cols = ["Kode Sapi", "Bobot Baru (kg)"]
                         
                         if not all(col in df_up.columns for col in req_cols):
                             st.error(f"❌ Format file Excel tidak sesuai. Pastikan terdapat kolom: {', '.join(req_cols)}")
@@ -255,10 +260,9 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
 
                                         for _, r_up in df_up_valid.iterrows():
                                             k_sapi = str(r_up["Kode Sapi"]).strip()
-                                            r_tag = str(r_up["RFID/Tag"]).strip()
                                             b_baru = float(r_up["Bobot Baru (kg)"])
 
-                                            mask_s = (df_sapi["Kode Sapi"] == k_sapi) & (df_sapi["RFID/Tag"] == r_tag)
+                                            mask_s = df_sapi["Kode Sapi"].astype(str).str.strip() == k_sapi
                                             if "Status" in df_sapi.columns:
                                                 mask_s = mask_s & (df_sapi["Status"] == "AKTIF")
 
@@ -267,6 +271,11 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
                                                 tgl_masuk_s = row_db["Tgl Masuk"]
                                                 b_awal_s = row_db["Bobot Awal (kg)"]
                                                 
+                                                # Ambil RFID resmi dari master data agar tidak kosong/EMPTY
+                                                rfid_resmi = str(row_db.get("RFID/Tag", "-")).strip()
+                                                if rfid_resmi in ["", "nan", "None", "EMPTY"]:
+                                                    rfid_resmi = "-"
+
                                                 adg_val = float(calculate_adg(tgl_masuk_s, b_awal_s, tgl_timbang_str, b_baru))
 
                                                 df_sapi.loc[mask_s, "Tgl Cek Akhir"] = tgl_timbang_str
@@ -276,7 +285,7 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
                                                 new_logs_list.append({
                                                     "Tanggal Timbang": tgl_timbang_str,
                                                     "Kode Sapi": k_sapi,
-                                                    "RFID/Tag": r_tag,
+                                                    "RFID/Tag": rfid_resmi,
                                                     "Lokasi Pen": row_db['Lokasi Pen'],
                                                     "Bobot (kg)": b_baru,
                                                     "ADG (kg/hari)": adg_val,
@@ -314,10 +323,10 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
                     opsi_sapi = df_sapi_belum_timbang.apply(lambda r: f"{r['Kode Sapi']} - RFID: {r['RFID/Tag']}", axis=1).tolist()
                     sapi_pilihan = st.selectbox("Pilih Kode Sapi Yang Ditimbang:", opsi_sapi)
                     
-                    kode_sapi_asli = sapi_pilihan.split(" - RFID: ")[0]
-                    rfid_sapi_asli = sapi_pilihan.split(" - RFID: ")[1]
+                    kode_sapi_asli = sapi_pilihan.split(" - RFID: ")[0].strip()
+                    rfid_sapi_asli = sapi_pilihan.split(" - RFID: ")[1].strip()
                     
-                    matched_rows = df_sapi_belum_timbang[(df_sapi_belum_timbang["Kode Sapi"] == kode_sapi_asli) & (df_sapi_belum_timbang["RFID/Tag"] == rfid_sapi_asli)]
+                    matched_rows = df_sapi_belum_timbang[df_sapi_belum_timbang["Kode Sapi"].astype(str).str.strip() == kode_sapi_asli]
                     if matched_rows.empty:
                         st.error("⚠️ Data sapi aktif tidak ditemukan di database master.")
                     else:
@@ -468,7 +477,7 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
                                     adg_terbaru = float(calculate_adg(row_sapi["Tgl Masuk"], row_sapi["Bobot Awal (kg)"], tgl_timbang_str, bobot_timbang_baru))
                                     
                                     # Update database master sapi (Khusus Sapi Aktif)
-                                    mask = (df_sapi["Kode Sapi"] == kode_sapi_asli) & (df_sapi["RFID/Tag"] == rfid_sapi_asli)
+                                    mask = df_sapi["Kode Sapi"].astype(str).str.strip() == kode_sapi_asli
                                     if "Status" in df_sapi.columns:
                                         mask = mask & (df_sapi["Status"] == "AKTIF")
 
@@ -482,7 +491,7 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
                                     new_log = {
                                         "Tanggal Timbang": tgl_timbang_str,
                                         "Kode Sapi": kode_sapi_asli,
-                                        "RFID/Tag": rfid_sapi_asli,
+                                        "RFID/Tag": str(row_sapi.get('RFID/Tag', '-')),
                                         "Lokasi Pen": row_sapi['Lokasi Pen'],
                                         "Bobot (kg)": float(bobot_timbang_baru),
                                         "ADG (kg/hari)": adg_terbaru,
@@ -506,7 +515,7 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
     # ==================== TAB 2: EDIT / HAPUS RIWAYAT ====================
     with tab_edit:
         st.markdown("### 📋 Koreksi Data Penimbangan yang Salah Input")
-        df_riwayat_timbang = read_sheet_to_df("riwayat_timbangan", COLS_RIWAYAT_TIMBANG)
+        df_riwayat_timbang = get_riwayat_clean()
         
         if df_riwayat_timbang.empty:
             st.info("ℹ️ Belum ada data riwayat timbangan yang tercatat.")
@@ -520,7 +529,7 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
             idx_pilihan = pilihan_no - 1
             row_lama = df_riwayat_timbang.iloc[idx_pilihan]
             
-            st.info(f"📍 **Data Terpilih:** {row_lama['Kode Sapi']} (RFID: {row_lama['RFID/Tag']}) | Tanggal: {row_lama['Tanggal Timbang']} | Bobot Lama: {row_lama['Bobot (kg)']} kg")
+            st.info(f"📍 **Data Terpilih:** {row_lama['Kode Sapi']} (RFID: {row_lama.get('RFID/Tag', '-')}) | Tanggal: {row_lama['Tanggal Timbang']} | Bobot Lama: {row_lama['Bobot (kg)']} kg")
 
             col_form, col_auth = st.columns(2)
             with col_form:
@@ -541,7 +550,7 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
                     st.error("❌ Otorisasi Ditolak! Password Admin salah.")
                 else:
                     with st.spinner("🔄 Sedang memproses koreksi data dan hitung ulang ADG..."):
-                        mask_sapi = (df_sapi["Kode Sapi"] == row_lama["Kode Sapi"]) & (df_sapi["RFID/Tag"] == row_lama["RFID/Tag"])
+                        mask_sapi = df_sapi["Kode Sapi"].astype(str).str.strip() == str(row_lama["Kode Sapi"]).strip()
                         if not df_sapi[mask_sapi].empty:
                             bobot_awal_sapi = df_sapi[mask_sapi].iloc[0]["Bobot Awal (kg)"]
                             tgl_masuk_sapi = df_sapi[mask_sapi].iloc[0]["Tgl Masuk"]
@@ -584,13 +593,15 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
             sapi_analisis = st.selectbox("Pilih Sapi untuk Dianalisis:", opsi_semua_sapi)
             
             if sapi_analisis:
-                df_riwayat_timbang = read_sheet_to_df("riwayat_timbangan", COLS_RIWAYAT_TIMBANG)
+                df_riwayat_timbang = get_riwayat_clean()
                 
                 if not df_riwayat_timbang.empty:
-                    kode_a = sapi_analisis.split(" - RFID: ")[0]
-                    rfid_a = sapi_analisis.split(" - RFID: ")[1]
+                    kode_a = sapi_analisis.split(" - RFID: ")[0].strip()
                     
-                    df_hist = df_riwayat_timbang[(df_riwayat_timbang["Kode Sapi"] == kode_a) & (df_riwayat_timbang["RFID/Tag"] == rfid_a)].copy()
+                    # Pencarian fleksibel hanya berdasarkan Kode Sapi (karena Kode Sapi sudah unik)
+                    df_hist = df_riwayat_timbang[
+                        df_riwayat_timbang["Kode Sapi"].astype(str).str.strip() == kode_a
+                    ].copy()
                     
                     if df_hist.empty:
                         st.info(f"Belum ada catatan riwayat timbangan tambahan untuk sapi {sapi_analisis}.")
@@ -598,9 +609,21 @@ def tampilkan_menu_timbangan(df_sapi, calculate_adg, save_data, add_activity_log
                         df_hist = df_hist.sort_values(by="Tanggal Timbang")
                         st.markdown(f"**Riwayat Kenaikan Bobot (kg) Sapi: {kode_a}**")
                         
+                        # Pastikan kolom numeric terformat dengan benar
+                        df_hist["Bobot (kg)"] = pd.to_numeric(df_hist["Bobot (kg)"], errors='coerce')
+                        df_hist["ADG (kg/hari)"] = pd.to_numeric(df_hist["ADG (kg/hari)"], errors='coerce')
+
                         df_chart = df_hist[["Tanggal Timbang", "Bobot (kg)"]].set_index("Tanggal Timbang")
                         st.line_chart(df_chart, use_container_width=True)
                         
-                        st.dataframe(df_hist, use_container_width=True, hide_index=True, column_config={"Bobot (kg)": st.column_config.NumberColumn(format="%.2f"), "ADG (kg/hari)": st.column_config.NumberColumn(format="%.2f")})
+                        st.dataframe(
+                            df_hist[["Tanggal Timbang", "Kode Sapi", "RFID/Tag", "Lokasi Pen", "Bobot (kg)", "ADG (kg/hari)", "Operator"]], 
+                            use_container_width=True, 
+                            hide_index=True, 
+                            column_config={
+                                "Bobot (kg)": st.column_config.NumberColumn(format="%.2f"), 
+                                "ADG (kg/hari)": st.column_config.NumberColumn(format="%.2f")
+                            }
+                        )
                 else:
                     st.info("ℹ️ Belum ada data riwayat timbangan yang tercatat di database.")
