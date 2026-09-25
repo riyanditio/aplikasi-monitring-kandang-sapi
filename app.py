@@ -90,8 +90,56 @@ DB_MAPPING = {
             "Suhu Tubuh (°C)": "suhu_tubuh_celcius", "Kondisi Klinis": "kondisi_klinis", 
             "Tindakan Medis": "tindakan_medis", "Catatan": "catatan", "Operator": "operator"
         }
+    },
+    "pakan_harian": {
+        "columns": {
+            "Tanggal": "tanggal", "Lokasi Pen": "lokasi_pen", "Metode": "metode",
+            "Target Spesifik": "target_spesifik", "Jenis Pakan": "jenis_pakan",
+            "Jumlah Pakan (kg)": "jumlah_pakan_kg", "Operator": "operator"
+        }
+    },
+    "riwayat_timbangan": {
+        "columns": {
+            "Tanggal Timbang": "tanggal_timbang", "Kode Sapi": "kode_sapi", "RFID/Tag": "rfid_tag",
+            "Lokasi Pen": "lokasi_pen", "Bobot (kg)": "bobot_kg", "ADG (kg/hari)": "adg_kg_hari",
+            "Operator": "operator"
+        }
+    },
+    "master_stok_pakan": {
+        "columns": {
+            "Nama Pakan": "nama_pakan", "Kategori": "kategori", "Stok (kg)": "stok_kg",
+            "Harga/kg (Rp)": "harga_kg_rp", "Stok Min (kg)": "stok_min_kg"
+        }
+    },
+    "pembelian_pakan": {
+        "columns": {
+            "Tanggal": "tanggal", "Nama Pakan": "nama_pakan", "Jumlah Masuk (kg)": "jumlah_masuk_kg",
+            "Harga/kg (Rp)": "harga_kg_rp", "Total Biaya (Rp)": "total_biaya_rp",
+            "Supplier / Catatan": "supplier_catatan", "Operator": "operator"
+        }
     }
 }
+
+def sanitize_df_for_db(df_input):
+    """Menyesuaikan tipe data angka dan tanggal agar kompatibel penuh dengan PostgreSQL Supabase."""
+    df_db = df_input.copy()
+    for col in df_db.columns:
+        col_lower = str(col).lower()
+        if any(k in col_lower for k in ['kg', 'bulan', 'hari', 'rp', 'ekor', 'bobot', 'adg', 'total', 'fcr', 'suhu', 'stok', 'harga', 'bruto', 'tara', 'netto']):
+            df_db[col] = pd.to_numeric(df_db[col], errors='coerce').fillna(0)
+        elif 'waktu' in col_lower or 'time' in col_lower:
+            df_db[col] = df_db[col].apply(lambda x: None if str(x).strip() in ["", "None", "NaN", "-", "nat"] else str(x))
+        elif any(k in col_lower for k in ['tgl', 'tanggal']):
+            def to_date_obj(val):
+                if pd.isna(val) or str(val).strip() in ["", "None", "NaN", "-", "nat"]:
+                    return None
+                try:
+                    dt = pd.to_datetime(str(val)[:10], errors='coerce')
+                    return dt.date() if pd.notnull(dt) else None
+                except Exception:
+                    return None
+            df_db[col] = df_db[col].apply(to_date_obj)
+    return df_db
 
 def read_sheet_to_df(worksheet_name, default_cols):
     engine = get_db_engine()
@@ -124,7 +172,7 @@ def read_sheet_to_df(worksheet_name, default_cols):
 
         for col in df.columns:
             if pd.api.types.is_datetime64_any_dtype(df[col]) or any(k in str(col).lower() for k in ['tgl', 'tanggal']):
-                df[col] = df[col].apply(lambda x: str(x)[:10] if pd.notnull(x) and str(x) != 'None' else "-")
+                df[col] = df[col].apply(lambda x: str(x)[:10] if pd.notnull(x) and str(x) not in ['None', 'NaN', 'nat', ''] else "-")
 
         for col in default_cols:
             if col not in df.columns: df[col] = ""
@@ -155,11 +203,7 @@ def write_df_to_sheet(worksheet_name, df, default_cols):
                     clean_columns[col] = c
                 df_db = df_db.rename(columns=clean_columns)
 
-            for col in df_db.columns:
-                if any(k in col for k in ['kg', 'bulan', 'hari', 'rp', 'ekor', 'bobot', 'adg', 'total', 'fcr', 'suhu']):
-                    df_db[col] = pd.to_numeric(df_db[col], errors='coerce').fillna(0)
-                elif any(k in col for k in ['tgl', 'tanggal']):
-                    df_db[col] = df_db[col].apply(lambda x: None if str(x).strip() in ["", "None", "NaN", "-"] else str(x))
+            df_db = sanitize_df_for_db(df_db)
 
             def jalankan_penyimpanan(connection):
                 connection.execute(text(f"DELETE FROM {worksheet_name}")) 
@@ -170,7 +214,7 @@ def write_df_to_sheet(worksheet_name, df, default_cols):
             except Exception as e_db:
                 error_msg = str(e_db).lower()
                 if ("relation" in error_msg and "does not exist" in error_msg and "column" not in error_msg) or "undefinedtable" in error_msg:
-                    columns_sql = ",\n  ".join([f"{col} NUMERIC" if any(k in col for k in ['kg', 'bulan', 'hari', 'rp', 'ekor', 'bobot', 'adg', 'total', 'fcr', 'suhu']) else f"{col} TEXT" for col in df_db.columns])
+                    columns_sql = ",\n  ".join([f"{col} NUMERIC" if any(k in col for k in ['kg', 'bulan', 'hari', 'rp', 'ekor', 'bobot', 'adg', 'total', 'fcr', 'suhu', 'stok', 'harga', 'bruto', 'tara', 'netto']) else f"{col} DATE" if any(k in col for k in ['tgl', 'tanggal']) and 'waktu' not in col else f"{col} TEXT" for col in df_db.columns])
                     sql_auto_create = f"CREATE TABLE {worksheet_name} (\n  id SERIAL PRIMARY KEY,\n  {columns_sql}\n);"
                     
                     with engine.begin() as conn_create: conn_create.execute(text(sql_auto_create))
@@ -206,11 +250,7 @@ def append_df_to_db(worksheet_name, df_new_records, default_cols):
                     clean_columns[col] = c
                 df_db = df_db.rename(columns=clean_columns)
 
-            for col in df_db.columns:
-                if any(k in col for k in ['kg', 'bulan', 'hari', 'rp', 'ekor', 'bobot', 'adg', 'total', 'fcr', 'suhu']):
-                    df_db[col] = pd.to_numeric(df_db[col], errors='coerce').fillna(0)
-                elif any(k in col for k in ['tgl', 'tanggal']):
-                    df_db[col] = df_db[col].apply(lambda x: None if str(x).strip() in ["", "None", "NaN", "-"] else str(x))
+            df_db = sanitize_df_for_db(df_db)
 
             def jalankan_append(connection):
                 df_db.to_sql(worksheet_name, connection, if_exists='append', index=False)
@@ -220,7 +260,7 @@ def append_df_to_db(worksheet_name, df_new_records, default_cols):
             except Exception as e_db:
                 error_msg = str(e_db).lower()
                 if ("relation" in error_msg and "does not exist" in error_msg and "column" not in error_msg) or "undefinedtable" in error_msg:
-                    columns_sql = ",\n  ".join([f"{col} NUMERIC" if any(k in col for k in ['kg', 'bulan', 'hari', 'rp', 'ekor', 'bobot', 'adg', 'total', 'fcr', 'suhu']) else f"{col} TEXT" for col in df_db.columns])
+                    columns_sql = ",\n  ".join([f"{col} NUMERIC" if any(k in col for k in ['kg', 'bulan', 'hari', 'rp', 'ekor', 'bobot', 'adg', 'total', 'fcr', 'suhu', 'stok', 'harga', 'bruto', 'tara', 'netto']) else f"{col} DATE" if any(k in col for k in ['tgl', 'tanggal']) and 'waktu' not in col else f"{col} TEXT" for col in df_db.columns])
                     sql_auto_create = f"CREATE TABLE {worksheet_name} (\n  id SERIAL PRIMARY KEY,\n  {columns_sql}\n);"
                     with engine.begin() as conn_create: conn_create.execute(text(sql_auto_create))
                     with engine.begin() as conn_retry: jalankan_append(conn_retry)
@@ -317,11 +357,9 @@ def load_master_pen():
         ])
         write_df_to_sheet("master_pen", df, cols)
     else:
-        # Bersihkan nama blok lama jika ada tanda kurung bobot
         df_cleaned = df.copy()
         df_cleaned["Blok"] = df_cleaned["Blok"].astype(str).apply(lambda x: re.sub(r'\s*\([^)]*\)', '', x).strip())
         
-        # Otomatis update ke Supabase jika ditemukan perubahan format nama blok
         if not df_cleaned.equals(df):
             write_df_to_sheet("master_pen", df_cleaned, cols)
             df = df_cleaned
@@ -334,13 +372,11 @@ def load_data():
     if df.empty: 
         return pd.DataFrame(columns=cols)
     
-    # Auto-fill default value untuk data eksisting
     if "Kode Batch" in df.columns:
         df["Kode Batch"] = df["Kode Batch"].apply(lambda x: "BATCH-2026-01" if str(x).strip() in ["", "None", "nan", "-"] else str(x))
     if "Status" in df.columns:
         df["Status"] = df["Status"].apply(lambda x: "AKTIF" if str(x).strip() in ["", "None", "nan", "-"] else str(x))
         
-    # Pembersihan otomatis teks bobot dalam kurung pada lokasi pen
     if "Lokasi Pen" in df.columns:
         df["Lokasi Pen"] = df["Lokasi Pen"].astype(str).apply(lambda x: re.sub(r'\s*\([^)]*\)', '', x).strip())
         
@@ -355,8 +391,8 @@ def save_panen_data(df): write_df_to_sheet("data_panen", df, ["Kode Sapi", "RFID
 
 def calculate_adg(tgl_masuk, bobot_awal, tgl_akhir, bobot_akhir):
     try:
-        t_in = tgl_masuk if isinstance(tgl_masuk, datetime) else datetime.strptime(str(tgl_masuk), "%Y-%m-%d").date()
-        t_out = tgl_akhir if isinstance(tgl_akhir, datetime) else datetime.strptime(str(tgl_akhir), "%Y-%m-%d").date()
+        t_in = tgl_masuk if isinstance(tgl_masuk, datetime) else datetime.strptime(str(tgl_masuk)[:10], "%Y-%m-%d").date()
+        t_out = tgl_akhir if isinstance(tgl_akhir, datetime) else datetime.strptime(str(tgl_akhir)[:10], "%Y-%m-%d").date()
         days = (t_out - t_in).days
         if days > 0: return round((float(bobot_akhir) - float(bobot_awal)) / days, 2)
     except: pass
