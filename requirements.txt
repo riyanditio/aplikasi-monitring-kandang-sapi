@@ -8,4 +8,4 @@ numpy
 plotly
 starlette<0.40.0
 psycopg2-binary
-psycopg
+psycopg-binary
