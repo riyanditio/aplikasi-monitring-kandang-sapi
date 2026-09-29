@@ -2,10 +2,10 @@ streamlit
 pandas
 sqlalchemy
 psycopg2-binary
+psycopg-binary
+psycopg
 openpyxl
-Pillow
+pillow
 numpy
 plotly
 starlette<0.40.0
-psycopg2-binary
-psycopg-binary
